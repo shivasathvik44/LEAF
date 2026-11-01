@@ -1,0 +1,38 @@
+Leaf third-party notices — initial source inventory
+
+These notices preserve upstream licenses for selected reader components.
+They are not a completed inventory of every resolved application dependency.
+Leaf's original code is MIT licensed; third-party assets retain their own terms.
+
+Readium-BSD-3-Clause.txt
+  Readium Kotlin Toolkit 3.4.0
+  Source: https://github.com/readium/kotlin-toolkit/blob/3.4.0/LICENSE
+
+ReadiumCSS-BSD-3-Clause.txt
+  Readium CSS assets included by the Readium navigator
+  Source: https://github.com/readium/readium-css/blob/master/LICENSE
+
+AccessibleDfA-OFL-1.1.txt
+  AccessibleDfA font, Copyright (c) Orange 2015
+  Source: Readium 3.4.0 navigator assets/readium/readium-css/fonts/LICENSE-AccessibleDfa
+
+iAWriterDuospace-LICENSE.txt
+  Complete license file distributed with the navigator's iA Writer Duospace font
+  Source: Readium 3.4.0 navigator assets/readium/readium-css/fonts/LICENSE-IaWriterDuospace.md
+
+PhotoView-Apache-2.0.txt
+  PhotoView 2.3.0, embedded by the stable Readium navigator
+  Source: https://github.com/Baseflow/PhotoView/blob/2.3.0/LICENSE
+
+AndroidPdfViewer-Apache-2.0.txt
+  AndroidPdfViewer 3.2.8
+  Source: https://github.com/marain87/AndroidPdfViewer/blob/3.2.8/LICENSE
+
+PdfiumAndroid-LICENSE.txt
+  PdfiumAndroid 1.9.8 wrapper and PDFium copyright/license notices
+  Source: https://github.com/marain87/PdfiumAndroid/blob/1.9.8/LICENSE
+
+The full Apache-2.0 license appears in AndroidPdfViewer-Apache-2.0.txt and
+PhotoView-Apache-2.0.txt. The PDFium wrapper's notice refers to this license.
+Additional PDFium native third-party notices must be reconciled with the exact
+resolved binaries before public release. See docs/dependencies.md in the source.

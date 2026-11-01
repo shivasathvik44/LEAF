@@ -1,0 +1,42 @@
+{
+  "fixed-layout.epub": {
+    "bytes": 4453,
+    "sha256": "5e9d9e9ca240e22240aaa21bfd9928709de7cb4f6ac8ff414e30d4a4645641ad",
+    "structurally_valid": true
+  },
+  "image-heavy.epub": {
+    "bytes": 8671,
+    "sha256": "968256a1695cf0fe847c9eef82e6a566287b99343139af47cee128a1a8d52c8b",
+    "structurally_valid": true
+  },
+  "malformed.epub": {
+    "bytes": 50,
+    "sha256": "80c22e4f8008078164b56dc1f3d25ac97ce05f80ce430b3df90d17f29514eb7e",
+    "structurally_valid": false
+  },
+  "malformed.pdf": {
+    "bytes": 55,
+    "sha256": "847e008ee6109b1049cfa5651ee61db2cbc61f75578aab9b1b8d13bfc6a9d31e",
+    "structurally_valid": false
+  },
+  "ordinary.pdf": {
+    "bytes": 2686,
+    "sha256": "73dcee2ae4c2f268b436f3686a991a622fb05584dc7eea3dcef7cb1da23fd663",
+    "structurally_valid": true
+  },
+  "rtl.epub": {
+    "bytes": 3487,
+    "sha256": "e9b5a07207d2a9673c04480b158355ad05fbfa834fdabb0b222fe0b1682d4494",
+    "structurally_valid": true
+  },
+  "scanned.pdf": {
+    "bytes": 3526,
+    "sha256": "e000261b13e3e2232aa9f0d4761e56cf9f2809cf67516c37304b897a10ae17c8",
+    "structurally_valid": true
+  },
+  "standard.epub": {
+    "bytes": 4940,
+    "sha256": "5895895659da36a8a636d2a29d5ba10abec79e71c0a5397c07fc83f5ab03d42e",
+    "structurally_valid": true
+  }
+}

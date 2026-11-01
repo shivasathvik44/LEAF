@@ -1,0 +1,44 @@
+name: Bug report
+description: Report a reproducible problem in Leaf.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include personal ebooks, notes, database files, private paths, or credentials. Use a redistributable sample when possible.
+  - type: input
+    id: version
+    attributes:
+      label: Leaf version or commit
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and Android version
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include the publication format and a public, legally redistributable fixture link if relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Remove book contents, notes, personal identifiers, and private file paths from logs and screenshots.
