@@ -6,6 +6,8 @@ import com.leaf.reader.domain.model.ReaderPreferences
 import com.leaf.reader.domain.model.ReaderTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import org.json.JSONObject
 import org.readium.adapter.pdfium.navigator.PdfiumEngineProvider
 import org.readium.adapter.pdfium.navigator.PdfiumNavigatorFragment
@@ -29,6 +31,7 @@ import org.readium.r2.shared.ExperimentalReadiumApi
 import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
+import org.readium.r2.shared.publication.Layout
 import org.readium.r2.shared.publication.services.locateProgression
 import org.readium.r2.shared.util.Url
 import org.readium.r2.shared.util.AbsoluteUrl
@@ -44,6 +47,8 @@ class ReaderDocument(
     val format: PublicationFormat,
     initialLocatorJson: String?,
 ) {
+    val supportsTypography: Boolean = format == PublicationFormat.EPUB && publication.metadata.layout != Layout.FIXED
+    val pageCount: Int? = publication.metadata.numberOfPages?.takeIf { it > 0 }
     private val links = mutableListOf<Link>()
     val chapters: List<ReaderChapter> = buildList {
         // Keep unusually deep tables of contents off the Kotlin/Java call stack.
@@ -65,13 +70,20 @@ class ReaderDocument(
     private var navigator: Navigator? = null
     private var ownerReleased = false
     private var hostReferences = 0
+    private var operationReferences = 0
     private var closed = false
 
     @Synchronized internal fun retainHost() { check(!closed); hostReferences++ }
     @Synchronized internal fun releaseHost() { check(hostReferences > 0); hostReferences--; closeWhenUnused() }
     @Synchronized fun releaseOwner() { if (!ownerReleased) { ownerReleased = true; closeWhenUnused() } }
+    @Synchronized private fun retainOperation(): Boolean {
+        if (closed || ownerReleased) return false
+        operationReferences++
+        return true
+    }
+    @Synchronized private fun releaseOperation() { operationReferences--; closeWhenUnused() }
     private fun closeWhenUnused() {
-        if (ownerReleased && hostReferences == 0 && !closed) {
+        if (ownerReleased && hostReferences == 0 && operationReferences == 0 && !closed) {
             closed = true
             try { publication.close() } catch (_: Exception) { /* Native/ZIP ownership is already relinquished. */ }
         }
@@ -136,9 +148,12 @@ class ReaderDocument(
     fun goChapter(id: Int): Boolean = links.getOrNull(id)?.let { navigator?.go(it, animated = false) } ?: false
     fun go(locatorJson: String): Boolean = parse(locatorJson)?.let { navigator?.go(it, animated = false) } ?: false
     suspend fun goProgression(value: Double): Boolean {
-        if (!value.isFinite()) return false
-        val locator = publication.locateProgression(value.coerceIn(0.0, 1.0)) ?: return false
-        return navigator?.go(locator, animated = false) ?: false
+        if (!value.isFinite() || !retainOperation()) return false
+        try {
+            val locator = publication.locateProgression(value.coerceIn(0.0, 1.0)) ?: return false
+            currentCoroutineContext().ensureActive()
+            return navigator?.go(locator, animated = false) ?: false
+        } finally { releaseOperation() }
     }
     fun currentLocation(): ReaderLocation? {
         // Snapshot the navigator synchronously before a close/reopen can outrun Flow collection.
@@ -147,12 +162,12 @@ class ReaderDocument(
     }
 
     private fun ReaderPreferences.epub() = EpubPreferences(
-        fontSize = fontSize / 100.0,
-        fontFamily = FontFamily(fontFamily),
-        lineHeight = lineSpacing,
-        pageMargins = margins,
-        publisherStyles = false,
-        scroll = scroll,
+        fontSize = if (supportsTypography) fontSize / 100.0 else null,
+        fontFamily = if (supportsTypography) FontFamily(fontFamily) else null,
+        lineHeight = if (supportsTypography) lineSpacing else null,
+        pageMargins = if (supportsTypography) margins else null,
+        publisherStyles = !supportsTypography,
+        scroll = supportsTypography && scroll,
         theme = when (theme) { ReaderTheme.LIGHT -> Theme.LIGHT; ReaderTheme.DARK -> Theme.DARK; ReaderTheme.SEPIA -> Theme.SEPIA },
     )
     private fun ReaderPreferences.pdf() = PdfiumPreferences(

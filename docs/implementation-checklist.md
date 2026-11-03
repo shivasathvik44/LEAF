@@ -22,8 +22,9 @@ alone does not verify rendering, annotation restoration, or daily usability.
   privacy manifest, CI configuration, unit tests, build, lint and device navigation.
 - [x] Phase 1: Room schema, safe managed-file import/quarantine, metadata/covers,
   duplicate handling, library/details/filter/sort/removal verified.
-- [x] Phase 2: offline EPUB/PDF Fragment rendering, complete Locator persistence,
-  restoration, chapters, appearance, immersive controls verified.
+- [x] Phase 2 local reader gate: offline EPUB/PDF Fragment rendering, full Locator
+  persistence, configuration restoration, chapters and appearance controls.
+  Process-death and full immersive-UI checks remain release verification tasks.
 - [ ] Phase 3: bookmarks, rendered EPUB highlights, note editing, EPUB search,
   navigation and restart restoration verified.
 - [ ] Phase 4: shelves and active foreground reading statistics verified.
@@ -82,17 +83,36 @@ Updated as commands execute; see `docs/testing.md` for the test strategy.
   :app:connectedDebugAndroidTest`: passed on API 35, x86_64, 4 KB pages.
 - 54 JVM tests and 35 Android tests passed with zero failures, errors, or skipped tests.
   Lint: zero errors, 15 warnings.
-- Real native Readium fragment rendering verified for standard EPUBs, image-heavy EPUBs,
-  RTL EPUBs, fixed-layout EPUBs, ordinary vector PDFs, and scanned image PDFs.
-- Native PDF ink rendering verified via pixel inspection on Pdfium surface; page navigation
-  and state recreation verified across configuration changes.
+- This original run verified native standard-EPUB text and ordinary-PDF ink rendering.
+  Image-heavy, RTL, fixed-layout and scanned-PDF fixtures were opened and their
+  positions inspected; native rendering for those variants was added in the review below.
 - EPUB WebView text display verified for body content and chapter traversal.
 - Full Locator JSON round-trip retains exact text fragments, hrefs, progression, and positions.
-- Process death and configuration change restoration verified using `ReaderRestorationFactory`,
-  preventing duplicate native fragment construction and publication resource leaks.
+- Activity recreation and orientation changes verified saved-chapter restoration
+  without native-fragment constructor errors. These tests do not kill the OS process
+  and do not establish general leak freedom.
 - ReaderViewModel integration test confirms asynchronous conflated position writer
-  persisting exact locations to Room and DataStore without race conditions across rapid re-open.
+  persisting exact locators to Room across the tested rapid close/reopen sequence.
 - Bookmark creation with optional labels, listing, deletion, and full-locator navigation verified.
-- Immersive mode system bar transitions, typography customizations (font size, font family,
-  line spacing, margins, continuous scroll, themes) verified.
+- A combined font-size, line-spacing, margin and scroll change retained the chapter.
+  Individual visual styling and immersive system-bar transitions were not asserted.
+
+### Phase 2 review and fixes — verified 2026-11-03
+
+- Kept the existing reader architecture; no full rewrite was necessary.
+- Cancel pending seeks when closing/retrying the reader, ignore stale navigation
+  results, and retain the publication until any suspended locator operation finishes
+  or is cancelled. Two tests wrap the real Readium locator service with delayed
+  delivery and verify actual container-close timing and cancellation propagation.
+- Fixed-layout EPUBs preserve publisher typography and no longer offer reflow-only
+  font/margin/scroll controls. PDFs show their current page and total page count,
+  while keeping the original full Locator/progression as the saved source of truth.
+- Added real native image-heavy, Arabic RTL and fixed-layout EPUB rendering tests,
+  scanned-PDF artwork/page-restoration checks, and computed EPUB font-size/family
+  assertions. Original assertions were preserved.
+- Full gate passed: **54 JVM tests, 41 Android tests**, no failures/errors/skips,
+  debug APK assembly, and lint with zero errors (16 warnings). Device: API 35,
+  x86_64, 4 KB pages. Log: `.leaf-tools/verification/phase2-review-check-1.log`.
+- Actual process death, production reader-chrome/system-bar behavior, complete
+  theme/appearance visual QA, API 24/37 and 16 KB devices remain unverified.
 

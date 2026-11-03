@@ -39,6 +39,7 @@ class ReaderViewModel @Inject constructor(
     val state: StateFlow<ReaderUiState> = _state.asStateFlow()
     private var bookId: String? = null
     private var opening: Job? = null
+    private var seeking: Job? = null
     private val observers = mutableListOf<Job>()
     private var writer: PositionWriter? = null
     private var writerBookId: String? = null
@@ -92,7 +93,18 @@ class ReaderViewModel @Inject constructor(
     fun goChapter(id: Int) { if (_state.value.document?.goChapter(id) != true) message("That chapter could not be opened.") }
     fun previous() { _state.value.document?.goBackward() }
     fun next() { _state.value.document?.goForward() }
-    fun goProgression(value: Double) { launchSaved { if (_state.value.document?.goProgression(value) != true) message("That reading position is unavailable.") } }
+    fun goProgression(value: Double) {
+        val document = _state.value.document ?: return
+        seeking?.cancel()
+        seeking = viewModelScope.launch {
+            try {
+                if (!document.goProgression(value) && _state.value.document === document) message("That reading position is unavailable.")
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) {
+                if (_state.value.document === document) message("That reading position could not be opened. Please try again.")
+            }
+        }
+    }
     private fun observe(action: suspend () -> Unit) { observers += viewModelScope.launch {
         try { action() } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { message("Some reader settings or saved places could not be loaded. Your existing data has been kept.") }
@@ -103,6 +115,7 @@ class ReaderViewModel @Inject constructor(
     } }
 
     fun closeReader() {
+        seeking?.cancel(); seeking = null
         val location = _state.value.document?.currentLocation() ?: _state.value.location
         val currentBook = bookId
         if (location != null && currentBook != null) {

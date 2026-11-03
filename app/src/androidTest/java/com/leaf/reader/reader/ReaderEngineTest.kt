@@ -17,6 +17,7 @@ import com.leaf.reader.data.readium.PublicationRepository
 import com.leaf.reader.data.readium.ReaderDocument
 import com.leaf.reader.data.readium.ReaderHarnessActivity
 import com.leaf.reader.domain.model.ReaderPreferences
+import com.leaf.reader.domain.model.ReaderTheme
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
@@ -94,13 +95,50 @@ class ReaderEngineTest {
         await { it.document?.currentLocation() != null }
         scenario!!.onActivity { activity -> assertTrue(activity.document!!.goChapter(1)) }
         await { it.document?.currentLocation()?.locatorJson?.contains("chapter2") == true }
-        scenario!!.onActivity { it.typography(ReaderPreferences(fontSize = 180.0, lineSpacing = 2.0, margins = 1.8, scroll = true)) }
+        val originalFontSize = webValue("parseFloat(getComputedStyle(document.body).fontSize)").toDouble()
+        scenario!!.onActivity { it.typography(ReaderPreferences(theme = ReaderTheme.DARK, fontSize = 180.0,
+            fontFamily = "monospace", lineSpacing = 2.0, margins = 1.8, scroll = true)) }
         awaitWebText("silver fern")
+        awaitWebCondition("parseFloat(getComputedStyle(document.body).fontSize) > ${originalFontSize * 1.5} && getComputedStyle(document.body).fontFamily.toLowerCase().includes('monospace')")
         scenario!!.onActivity { activity ->
             val locator = requireNotNull(ReaderDocument.parse(activity.document!!.currentLocation()!!.locatorJson))
             assertTrue(locator.href.toString().contains("chapter2"))
             assertNull(activity.failure)
         }
+    }
+
+    @Test fun imageHeavyEpubActuallyDisplaysAndDecodesAllIllustrations() {
+        launch("image-heavy.epub", PublicationFormat.EPUB)
+        await { it.document?.currentLocation() != null }
+        awaitWebText("Leaf illustration 6")
+        awaitWebCondition("document.images.length === 6 && Array.from(document.images).every(image => image.complete && image.naturalWidth > 0)")
+        scenario!!.onActivity { assertTrue(it.document!!.supportsTypography); assertNull(it.failure) }
+    }
+
+    @Test fun rtlEpubDisplaysArabicAndNavigatesToItsSecondChapter() {
+        launch("rtl.epub", PublicationFormat.EPUB)
+        await { it.document?.currentLocation() != null }
+        awaitWebText("هذه حديقة هادئة")
+        awaitWebCondition("getComputedStyle(document.documentElement).direction === 'rtl'")
+        scenario!!.onActivity { assertTrue(it.document!!.goChapter(1)) }
+        awaitWebText("هذه هي الصفحة الأخيرة من القصة")
+        scenario!!.onActivity { assertNull(it.failure) }
+    }
+
+    @Test fun fixedLayoutEpubRendersAndPreservesPublisherTypography() {
+        launch("fixed-layout.epub", PublicationFormat.EPUB)
+        await { it.document?.currentLocation() != null }
+        awaitWebText("This page uses a 600 by 800 viewport")
+        val originalSize = webValue("getComputedStyle(document.body).fontSize")
+        scenario!!.onActivity { activity ->
+            assertFalse(activity.document!!.supportsTypography)
+            activity.typography(ReaderPreferences(fontSize = 250.0, fontFamily = "monospace", lineSpacing = 3.0, margins = 3.0, scroll = true))
+        }
+        awaitWebText("This page uses a 600 by 800 viewport")
+        assertEquals(originalSize, webValue("getComputedStyle(document.body).fontSize"))
+        scenario!!.onActivity { assertTrue(it.document!!.goChapter(1)) }
+        awaitWebText("LEAF-FXL-TWO")
+        scenario!!.onActivity { assertNull(it.failure) }
     }
 
     @Test fun orientationChangeReopensTheSameMeaningfulChapter() {
@@ -130,6 +168,20 @@ class ReaderEngineTest {
         scenario!!.onActivity { assertNull(it.failure) }
     }
 
+    @Test fun scannedPdfDisplaysItsRasterArtworkAndRestoresSecondPage() {
+        launch("scanned.pdf", PublicationFormat.PDF)
+        await { activity -> activity.document?.currentLocation() != null && nativePdfView(activity.window.decorView)?.let { view ->
+            (view.javaClass.getMethod("getPageCount").invoke(view) as Int) == 2
+        } == true }
+        await { activity -> nativePdfView(activity.window.decorView)?.let(::hasScannedArtwork) == true }
+        scenario!!.onActivity { activity -> assertEquals(2, activity.document!!.pageCount); assertTrue(activity.document!!.goForward()) }
+        await { it.document?.currentLocation()?.position == 2 }
+        scenario!!.recreate()
+        await { it.document?.currentLocation()?.position == 2 }
+        await { activity -> nativePdfView(activity.window.decorView)?.let(::hasScannedArtwork) == true }
+        scenario!!.onActivity { assertNull(it.failure) }
+    }
+
     private fun fixture(name: String): File = File(directory, name).also { file ->
         instrumentation.context.assets.open("publications/$name").use { input -> file.outputStream().use(input::copyTo) }
     }
@@ -149,6 +201,9 @@ class ReaderEngineTest {
         fail("The real native reader did not reach the expected state within $timeout ms")
     }
     private fun awaitWebText(text: String) {
+        awaitWebCondition("document.body.innerText.toLowerCase().includes(${org.json.JSONObject.quote(text.lowercase())})")
+    }
+    private fun awaitWebCondition(expression: String) {
         val deadline = SystemClock.uptimeMillis() + 15_000
         while (SystemClock.uptimeMillis() < deadline) {
             val latch = CountDownLatch(1)
@@ -157,7 +212,7 @@ class ReaderEngineTest {
                 val webViews = views(activity.window.decorView).filterIsInstance<WebView>().filter { it.isShown && it.getGlobalVisibleRect(Rect()) }
                 if (webViews.isEmpty()) latch.countDown() else {
                     var pending = webViews.size
-                    webViews.forEach { view -> view.evaluateJavascript("document.body.innerText.toLowerCase().includes('${text.lowercase()}')") {
+                    webViews.forEach { view -> view.evaluateJavascript(expression) {
                         found = found || it == "true"
                         pending--
                         if (pending == 0) latch.countDown()
@@ -168,7 +223,18 @@ class ReaderEngineTest {
             if (found) return
             SystemClock.sleep(100)
         }
-        fail("Actual EPUB WebView did not display the expected fixture text")
+        fail("Actual EPUB WebView did not reach the expected fixture/rendering state: $expression")
+    }
+    private fun webValue(expression: String): String {
+        val latch = CountDownLatch(1)
+        var result: String? = null
+        scenario!!.onActivity { activity ->
+            val web = views(activity.window.decorView).filterIsInstance<WebView>().firstOrNull { it.isShown && it.getGlobalVisibleRect(Rect()) }
+            assertNotNull("A visible native EPUB WebView is required", web)
+            web!!.evaluateJavascript(expression) { result = it; latch.countDown() }
+        }
+        assertTrue("WebView evaluation timed out", latch.await(3, TimeUnit.SECONDS))
+        return requireNotNull(result)
     }
     private fun views(view: View): List<View> = listOf(view) + if (view is ViewGroup) (0 until view.childCount).flatMap { views(view.getChildAt(it)) } else emptyList()
     private fun nativePdfView(view: View): View? = views(view).firstOrNull { it.javaClass.name == "com.github.barteksc.pdfviewer.PDFView" }
@@ -186,6 +252,22 @@ class ReaderEngineTest {
                 if (r < 100 && g < 100 && b < 100) ink++
             }
             return white > 1_000 && ink > 30
+        } finally { bitmap.recycle() }
+    }
+    private fun hasScannedArtwork(view: View): Boolean {
+        if (view.width <= 0 || view.height <= 0) return false
+        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        try {
+            view.draw(Canvas(bitmap))
+            var green = 0
+            var warmPaper = 0
+            for (y in view.height / 10 until view.height * 9 / 10 step 3) for (x in view.width / 10 until view.width * 9 / 10 step 3) {
+                val pixel = bitmap.getPixel(x, y)
+                val r = pixel shr 16 and 255; val g = pixel shr 8 and 255; val b = pixel and 255
+                if (g > r + 20 && g > b + 20 && r < 150) green++
+                if (r > 220 && g > 210 && b in 180..235) warmPaper++
+            }
+            return green > 30 && warmPaper > 1_000
         } finally { bitmap.recycle() }
     }
 }

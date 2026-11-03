@@ -106,7 +106,7 @@ fun ReaderScreen(bookId: String, onBack: () -> Unit) {
                         state.location?.title?.let { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall) }
                     }
                     Box {
-                        IconButton(onClick = { overflow = true }) { Icon(Icons.Default.MoreVert, "Reader options") }
+                        IconButton(onClick = { overflow = true }, enabled = document != null) { Icon(Icons.Default.MoreVert, "Reader options") }
                         DropdownMenu(expanded = overflow, onDismissRequest = { overflow = false }) {
                             DropdownMenuItem(text = { Text("Contents") }, onClick = { overflow = false; panel = "contents" })
                             DropdownMenuItem(text = { Text("Add bookmark") }, enabled = state.location != null, onClick = { overflow = false; bookmarkLabel = state.location?.title.orEmpty(); addingBookmark = true })
@@ -124,7 +124,10 @@ fun ReaderScreen(bookId: String, onBack: () -> Unit) {
                         enabled = document != null, modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Reading progress" })
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                         IconButton(onClick = model::previous, enabled = document != null) { Icon(Icons.AutoMirrored.Default.ArrowBack, "Previous page") }
-                        Text("${((state.location?.progression ?: 0.0) * 100).roundToInt()}%", style = MaterialTheme.typography.labelLarge)
+                        val position = state.location?.position
+                        val pageCount = document?.pageCount
+                        Text(if (state.format == PublicationFormat.PDF && position != null && pageCount != null) "Page $position of $pageCount"
+                            else "${((state.location?.progression ?: 0.0) * 100).roundToInt()}%", style = MaterialTheme.typography.labelLarge)
                         IconButton(onClick = model::next, enabled = document != null) { Icon(Icons.AutoMirrored.Default.ArrowForward, "Next page") }
                     }
                 }
@@ -172,21 +175,21 @@ fun ReaderScreen(bookId: String, onBack: () -> Unit) {
                     }
                 }
             }
-            "appearance" -> ReaderAppearance(state.preferences, state.format, model::updatePreferences, model::resetPreferences)
+            "appearance" -> ReaderAppearance(state.preferences, state.format, document?.supportsTypography == true, model::updatePreferences, model::resetPreferences)
         }
         Spacer(Modifier.height(32.dp))
     }
 }
 
 @Composable
-private fun ReaderAppearance(preferences: ReaderPreferences, format: PublicationFormat, onChange: (ReaderPreferences) -> Unit, onReset: () -> Unit) {
+private fun ReaderAppearance(preferences: ReaderPreferences, format: PublicationFormat, supportsTypography: Boolean, onChange: (ReaderPreferences) -> Unit, onReset: () -> Unit) {
     Column(Modifier.fillMaxWidth().heightIn(max = 600.dp).verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Reading appearance", style = MaterialTheme.typography.headlineSmall)
         Text("Changes apply to this book. Reset to use your defaults.", style = MaterialTheme.typography.bodyMedium)
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ReaderTheme.entries.forEach { theme -> FilterChip(selected = preferences.theme == theme, onClick = { onChange(preferences.copy(theme = theme)) }, label = { Text(theme.name.lowercase().replaceFirstChar(Char::titlecase)) }) }
         }
-        if (format == PublicationFormat.EPUB) {
+        if (supportsTypography) {
             Text("Font size · ${preferences.fontSize.roundToInt()}%")
             SettingSlider("Font size", preferences.fontSize, 50.0..300.0) { onChange(preferences.copy(fontSize = it)) }
             Text("Font family")
@@ -197,10 +200,12 @@ private fun ReaderAppearance(preferences: ReaderPreferences, format: Publication
             SettingSlider("Line spacing", preferences.lineSpacing, 0.8..3.0) { onChange(preferences.copy(lineSpacing = it)) }
             Text("Margins")
             SettingSlider("Margins", preferences.margins, 0.0..3.0) { onChange(preferences.copy(margins = it)) }
-        } else {
+        } else if (format == PublicationFormat.PDF) {
             Text("PDF pages retain their original colors and typography. Theme changes affect reader controls.")
+        } else {
+            Text("This EPUB has a fixed layout. Its typography and pagination follow the publisher’s page design.")
         }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        if (supportsTypography || format == PublicationFormat.PDF) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Continuous scrolling", Modifier.weight(1f))
             Switch(checked = preferences.scroll, onCheckedChange = { onChange(preferences.copy(scroll = it)) }, modifier = Modifier.semantics { contentDescription = "Continuous scrolling" })
         }

@@ -32,8 +32,6 @@ The [official emulator archive](https://developer.android.com/studio/emulator_ar
 
 Local evidence is retained under the ignored `.leaf-tools/verification/` directory: `foundation-navigation-device.log`, `foundation-launch.log`, `android35-device-facts.txt`, `foundation-device.png`, and native emulator logs. The reproducible local helpers are `.leaf-tools/tools/start-emulator36.sh` and `.leaf-tools/tools/run-foundation-device-tests.sh`. The previously recorded JVM/build/lint results are tracked in the [implementation checklist](implementation-checklist.md).
 
-## Commands
-
 ### Library/import gate — 2026-11-03
 
 `assembleDebug`, `testDebugUnitTest`, `lintDebug` and `connectedDebugAndroidTest`
@@ -59,16 +57,42 @@ The run executed **54 JVM unit tests and 35 Android tests**, with zero failures,
 errors, or skipped tests. Lint reported zero errors and 15 warnings.
 
 Reader Android coverage includes:
-- EPUB WebView text rendering across multiple chapters and formats (standard, image-heavy, RTL, fixed-layout).
-- Real PDFium native ink rendering on vector and scanned PDFs.
+
+- Standard-EPUB WebView text/chapter rendering and ordinary-PDF native ink rendering.
+- Parser/position inspection for image-heavy, RTL, fixed-layout EPUBs and scanned PDFs.
 - Full Locator round-trip serialization preserving href, progression, title, and text fragments.
-- Process recreation / configuration changes retaining the exact reading location without resource leaks.
+- Activity recreation and orientation changes retaining the chapter/page without native-constructor errors.
 - Production ViewModel + Room + DataStore integration with conflated asynchronous locator persistence.
 - Bookmark creation, labelling, list observation, navigation, and removal.
-- Reader appearance settings: themes (light, dark, sepia), font size/family, line spacing, margins, and continuous scrolling.
+- Chapter preservation while requesting combined font-size, line-spacing, margin and scroll changes.
 
-Annotations/search, API 24, and 16 KB devices still require their separate later verification gates.
+`ActivityScenario.recreate()` is configuration recreation, not an OS process-death
+test. This original run did not individually assert theme colors, font-family
+rendering, immersive system bars or every format's native view.
 
+### Phase 2 review gate — 2026-11-03
+
+The same four Gradle tasks passed with **54 JVM tests and 41 Android tests**,
+zero failures/errors/skips, and zero lint errors (16 warnings). Device remained
+API 35, x86_64, 4 KB pages. Raw local log:
+`.leaf-tools/verification/phase2-review-check-1.log`.
+
+New real-reader assertions cover decoded illustrations in a visible EPUB WebView,
+Arabic RTL content/chapter navigation, fixed-layout publisher-font preservation,
+scanned-PDF raster pixels and page restoration, and computed reflowable EPUB
+font-size/family changes. Two real Readium service/container tests delay locator
+delivery to verify that closing a reader retains its publication until an active
+seek completes, that cancellation releases the lease, and that close happens once.
+
+The review also corrected unsupported fixed-layout appearance controls and added
+PDF page-count display. Tests verify the underlying capability/page-count values;
+they do not yet exercise the complete production Compose reader chrome.
+
+Process death, immersive system-bar transitions, complete theme/appearance visual
+QA, annotations/search, API 24/37, and 16 KB devices remain separate verification
+gates. No CI execution or production release signing is claimed.
+
+## Commands
 
 Run from the repository root with JDK 17 and the configured Android SDK installed:
 
