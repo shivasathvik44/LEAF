@@ -2,9 +2,57 @@
 
 ## Recorded results
 
-No test, device, lint, CI, or release result is claimed by this initial document. Record commands, toolchain/device versions, exit status, report locations, and known gaps after each milestone. A configured workflow is not evidence that GitHub Actions has run successfully.
+### Foundation device verification — 2026-11-03
+
+The preserved foundation app and instrumentation APKs were installed on an isolated Android 35 (Android 15), x86_64 emulator with ordinary 4096-byte memory pages. `NavigationTest.mainDestinationsAreReachable` passed: **OK (1 test)** in 2.461 seconds. A separate cold launch of `com.leaf.reader/.MainActivity` returned `Status: ok` in 1292 ms. The screenshot was visually inspected; Leaf branding and all four main navigation destinations were visible.
+
+The executed device-test command was:
+
+```sh
+adb -s emulator-5556 shell am instrument -w -r \
+  -e class com.leaf.reader.NavigationTest \
+  com.leaf.reader.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+These were the frozen foundation APKs retained under the ignored `.leaf-tools/phase0/` directory, not a claim that the current import or reader implementation has passed device tests. No personal books or library data were used. API 24, API 37, 16 KB page-size devices, importing, reading, annotations, and process restoration remain separate verification gates. GitHub Actions has not been verified by this local test.
+
+The host's bundled SwiftShader graphics path crashed natively before Android boot with emulator 37.2.13 and 36.1.9. A native debugger stopped in `RenderThread` with bundled `gles_swiftshader/libGLESv2.so` frames. The working local configuration uses official emulator **36.1.9**, Linux build **13823996**, with host graphics and Vulkan disabled:
+
+```sh
+ANDROID_HOME="$PWD/.leaf-tools/android-sdk" \
+ANDROID_SDK_ROOT="$PWD/.leaf-tools/android-sdk" \
+ANDROID_AVD_HOME="$PWD/.leaf-tools/avd" \
+.leaf-tools/emulator-36.1.9/emulator/emulator \
+  -avd leaf-api35-e36 -port 5556 -no-window -no-audio -no-boot-anim \
+  -gpu host -feature -Vulkan -memory 2560 -no-snapshot \
+  -camera-back none -camera-front none
+```
+
+The [official emulator archive](https://developer.android.com/studio/emulator_archive) supplied the Linux archive, verified before extraction: 319203216 bytes; SHA-256 `5a580b0169e3fd26c99a67b86720f367f78828b1733d748cbe566e001b517024`. Host-specific graphics workarounds do not establish compatibility on other machines. This configuration preserves the isolated AVD's data and does not alter system-wide graphics or libc settings.
+
+Local evidence is retained under the ignored `.leaf-tools/verification/` directory: `foundation-navigation-device.log`, `foundation-launch.log`, `android35-device-facts.txt`, `foundation-device.png`, and native emulator logs. The reproducible local helpers are `.leaf-tools/tools/start-emulator36.sh` and `.leaf-tools/tools/run-foundation-device-tests.sh`. The previously recorded JVM/build/lint results are tracked in the [implementation checklist](implementation-checklist.md).
 
 ## Commands
+
+### Library/import gate — 2026-11-03
+
+`assembleDebug`, `testDebugUnitTest`, `lintDebug` and `connectedDebugAndroidTest`
+passed together using the selected toolchain and the API 35 emulator described
+above. The run executed **54 JVM tests and 27 Android tests**, with zero failures,
+errors or skipped tests. Lint reported zero errors and 15 warnings. Raw local log:
+`.leaf-tools/verification/phase1-check-3.log`.
+
+Android coverage includes the real system document-picker launch/cancellation,
+main navigation, 10 Room relationship/transaction/preservation tests, and 15
+real import/storage tests. Import tests use actual Readium, Room and content URIs
+from a debug-only non-exported FileProvider limited to test fixtures. They isolate
+their storage and database, preserve source bytes, verify restart persistence,
+duplicate and damaged-copy recovery, corrupt/large/unsupported inputs, explicit
+private-copy removal, orphan quarantine, metadata bounds and a real SQLite
+`RAISE(ABORT)` failure after file promotion. No fake rendering engine is used.
+
+Reader rendering, annotations/search, orientation/process restoration, API 24,
+and 16 KB devices still require their separate later verification gates.
 
 Run from the repository root with JDK 17 and the configured Android SDK installed:
 

@@ -18,9 +18,9 @@ availability, and release signing are the principal verification risks.
 Only mark an item verified after the associated behavior/test passes. Compilation
 alone does not verify rendering, annotation restoration, or daily usability.
 
-- [ ] Phase 0: compatible pinned toolchain, Compose/Hilt shell, privacy manifest,
-  CI, unit tests, build and lint pass.
-- [ ] Phase 1: Room schema, safe managed-file import/recovery, metadata/covers,
+- [x] Phase 0 local acceptance: compatible pinned toolchain, Compose/Hilt shell,
+  privacy manifest, CI configuration, unit tests, build, lint and device navigation.
+- [x] Phase 1: Room schema, safe managed-file import/quarantine, metadata/covers,
   duplicate handling, library/details/filter/sort/removal verified.
 - [ ] Phase 2: offline EPUB/PDF Fragment rendering, complete Locator persistence,
   restoration, chapters, appearance, immersive controls verified.
@@ -52,4 +52,26 @@ Updated as commands execute; see `docs/testing.md` for the test strategy.
 - `:app:assembleDebugAndroidTest`: passed. Device execution is pending.
 - Official Android 35 emulator image checksum verified. SDK/AVD use isolated,
   ignored workspace storage to avoid memory-backed temporary-storage pressure.
-- Launch/navigation, remote CI and production signing remain unverified.
+- API 35 foundation launch and navigation subsequently passed on official emulator
+  36.1.9 using host graphics. Remote CI and production signing remain unverified.
+
+### Library/import — verified 2026-11-03
+
+- `:app:assembleDebug :app:testDebugUnitTest :app:lintDebug
+  :app:connectedDebugAndroidTest`: passed on API 35, x86_64, 4 KB pages.
+- 54 JVM tests and 27 Android tests passed with zero failures/errors/skips.
+  Lint: zero errors, 15 warnings. Tests include the real system document picker,
+  10 Room tests and 15 real import/storage integration tests.
+- Valid EPUB/PDF imports extract actual Readium metadata/covers, persist across
+  database reopen, preserve original sources, repair missing/corrupt managed copies
+  under the existing UUID, and retain annotations/progress during repair.
+- Real SQLite insertion abort verifies promotion rollback/quarantine without
+  destroying existing books or source documents. Quarantined files are preserved;
+  a user-facing recovery vault remains a reliability-phase task.
+- Enforced import limits: physical file 1 GiB; text resource 8 MiB; binary resource
+  256 MiB; total expanded ZIP 4 GiB; 100,000 ZIP entries; central directory 16 MiB;
+  metadata/navigation markup budget 25,000 tokens; UTF-8 title 16 KiB, author
+  64 KiB, description 512 KiB. Rejections are explicit, without silent truncation.
+- Logs are retained locally under ignored `.leaf-tools/verification/` and reports
+  under `app/build/`. No production rendering/annotation claim follows from this
+  import milestone; those are separate acceptance gates.

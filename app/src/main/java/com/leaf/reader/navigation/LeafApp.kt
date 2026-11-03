@@ -4,36 +4,59 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.*
+import com.leaf.reader.feature.bookdetails.BookDetailsScreen
+import com.leaf.reader.feature.library.LibraryScreen
+import com.leaf.reader.feature.library.LibraryViewModel
 
 private val destinations = listOf("Library", "Shelves", "Activity", "Settings")
 
 @Composable
-fun LeafApp() {
+fun LeafApp(model: LibraryViewModel) {
     val nav = rememberNavController()
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route ?: "Library"
-    Scaffold(bottomBar = {
+    val message by model.message.collectAsStateWithLifecycle()
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(message) {
+        message?.takeIf(String::isNotBlank)?.let {
+            snackbar.showSnackbar(it, actionLabel = "Dismiss", duration = SnackbarDuration.Long)
+            model.dismissMessage()
+        }
+    }
+    Scaffold(snackbarHost = { SnackbarHost(snackbar) }, bottomBar = {
         NavigationBar {
             destinations.forEachIndexed { index, destination ->
-                NavigationBarItem(selected = route == destination,
+                NavigationBarItem(selected = route == destination || (destination == "Library" && route.startsWith("book/")),
                     onClick = { nav.navigate(destination) { launchSingleTop = true; restoreState = true; popUpTo("Library") { saveState = true } } },
+                    modifier = Modifier.testTag("nav-$destination"),
                     icon = { Icon(listOf(Icons.Default.Home, Icons.Default.Favorite, Icons.Default.DateRange, Icons.Default.Settings)[index], contentDescription = null) },
                     label = { Text(destination) })
             }
         }
     }) { padding ->
         NavHost(nav, startDestination = "Library", modifier = Modifier.padding(padding)) {
-            destinations.forEach { destination ->
+            composable("Library") {
+                val state by model.state.collectAsStateWithLifecycle()
+                LibraryScreen(state, model) { nav.navigate("book/$it") }
+            }
+            composable("book/{bookId}") { destination ->
+                val id = destination.arguments?.getString("bookId").orEmpty()
+                val state by model.state.collectAsStateWithLifecycle()
+                BookDetailsScreen(state.books.find { it.id == id }, state.loading,
+                    onBack = { nav.popBackStack() }, onStatus = { model.setStatus(id, it) },
+                    onRemove = { model.remove(id); nav.popBackStack() })
+            }
+            destinations.drop(1).forEach { destination ->
                 composable(destination) {
                     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(if (destination == "Library") "Leaf" else destination, style = MaterialTheme.typography.headlineLarge)
+                        Text(destination, style = MaterialTheme.typography.headlineLarge)
                         Text(when (destination) {
-                            "Library" -> "Your reading, at your pace."
                             "Shelves" -> "Make room for your next good read."
                             "Activity" -> "Every quiet minute counts."
                             else -> "Private by design. Your books stay on this device."

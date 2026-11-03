@@ -181,10 +181,10 @@ class LeafDatabaseTest {
         try {
             migrations.createDatabase(name, 1).apply {
                 execSQL("INSERT INTO books (id,title,author,description,format,storagePath,sourceUri,coverPath,fileSize,contentHash,importedAt,lastOpenedAt,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                    arrayOf(book.id, book.title, book.author, book.description, "EPUB", book.storagePath, book.sourceUri, book.coverPath, book.fileSize, book.contentHash, book.importedAt, null, "READING"))
-                execSQL("INSERT INTO reading_progress (bookId,locatorJson,progression,updatedAt) VALUES (?,?,?,?)", arrayOf(book.id, LOCATOR, 0.7, 100L))
-                execSQL("INSERT INTO highlights (id,bookId,locatorJson,selectedText,color,createdAt) VALUES (?,?,?,?,?,?)", arrayOf(highlight, book.id, LOCATOR, "Saved passage", 0xFFFFD54FL, 100L))
-                execSQL("INSERT INTO notes (id,highlightId,content,updatedAt) VALUES (?,?,?,?)", arrayOf(note, highlight, "Preserve this note", 100L))
+                    arrayOf<Any?>(book.id, book.title, book.author, book.description, "EPUB", book.storagePath, book.sourceUri, book.coverPath, book.fileSize, book.contentHash, book.importedAt, null, "READING"))
+                execSQL("INSERT INTO reading_progress (bookId,locatorJson,progression,updatedAt) VALUES (?,?,?,?)", arrayOf<Any?>(book.id, LOCATOR, 0.7, 100L))
+                execSQL("INSERT INTO highlights (id,bookId,locatorJson,selectedText,color,createdAt) VALUES (?,?,?,?,?,?)", arrayOf<Any?>(highlight, book.id, LOCATOR, "Saved passage", 0xFFFFD54FL, 100L))
+                execSQL("INSERT INTO notes (id,highlightId,content,updatedAt) VALUES (?,?,?,?)", arrayOf<Any?>(note, highlight, "Preserve this note", 100L))
                 close()
             }
             migrations.runMigrationsAndValidate(name, 1, true).close()
@@ -204,7 +204,7 @@ class LeafDatabaseTest {
         try {
             migrations.createDatabase(name, 1).apply {
                 execSQL("INSERT INTO books (id,title,author,description,format,storagePath,sourceUri,coverPath,fileSize,contentHash,importedAt,lastOpenedAt,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                    arrayOf(book.id, book.title, book.author, null, "EPUB", book.storagePath, null, null, book.fileSize, book.contentHash, 100L, null, "UNREAD"))
+                    arrayOf<Any?>(book.id, book.title, book.author, null, "EPUB", book.storagePath, null, null, book.fileSize, book.contentHash, 100L, null, "UNREAD"))
                 version = 99
                 close()
             }

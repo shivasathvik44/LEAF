@@ -12,6 +12,7 @@ enum class ImportProblem {
     FILE_TOO_LARGE,
     INSUFFICIENT_STORAGE,
     UNREADABLE_CONTENT,
+    RESOURCE_LIMIT,
 }
 
 /** Safe to display: messages never include a source URI, file path, or book content. */
@@ -26,6 +27,7 @@ class PublicationImportException(
         ImportProblem.FILE_TOO_LARGE -> "This book exceeds the import size limit."
         ImportProblem.INSUFFICIENT_STORAGE -> "There is not enough free storage to import this book. Free some space and try again."
         ImportProblem.UNREADABLE_CONTENT -> "This file could not be read. Select it again and try importing it."
+        ImportProblem.RESOURCE_LIMIT -> "This EPUB contains a resource that is too large to open safely. Try a smaller or less complex copy."
     },
     cause,
 )
