@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,7 +24,7 @@ import com.leaf.reader.domain.model.*
 private val importTypes = arrayOf("application/epub+zip", "application/pdf", "application/octet-stream", "application/x-epub+zip")
 
 @Composable
-fun LibraryScreen(state: LibraryUiState, model: LibraryViewModel, onBook: (String) -> Unit) {
+fun LibraryScreen(state: LibraryUiState, model: LibraryViewModel, onBook: (String) -> Unit, onRead: (String) -> Unit) {
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments(), model::importBooks)
     var sortMenu by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
@@ -70,13 +71,13 @@ fun LibraryScreen(state: LibraryUiState, model: LibraryViewModel, onBook: (Strin
                     Button(onClick = { picker.launch(importTypes) }, enabled = !state.importing) { Text("Choose books") }
                 }
             }
-            else -> LibraryBooks(state, onBook)
+            else -> LibraryBooks(state, onBook, onRead)
         }
     }
 }
 
 @Composable
-private fun LibraryBooks(state: LibraryUiState, onBook: (String) -> Unit) {
+private fun LibraryBooks(state: LibraryUiState, onBook: (String) -> Unit, onRead: (String) -> Unit) {
     LazyVerticalGrid(columns = GridCells.Fixed(if (state.preferences.listView) 1 else 2),
         contentPadding = PaddingValues(24.dp), horizontalArrangement = Arrangement.spacedBy(18.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         if (state.query.isBlank() && state.status == null) {
@@ -84,7 +85,7 @@ private fun LibraryBooks(state: LibraryUiState, onBook: (String) -> Unit) {
             if (current != null) item(span = { GridItemSpan(maxLineSpan) }) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Continue reading", style = MaterialTheme.typography.titleLarge, fontFamily = FontFamily.Serif)
-                    Card(onClick = { onBook(current.id) }, modifier = Modifier.fillMaxWidth()) {
+                    Card(onClick = { onRead(current.id) }, modifier = Modifier.fillMaxWidth()) {
                         Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                             BookCover(current, Modifier.width(76.dp).height(110.dp))
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -102,7 +103,7 @@ private fun LibraryBooks(state: LibraryUiState, onBook: (String) -> Unit) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Recently opened", style = MaterialTheme.typography.titleLarge, fontFamily = FontFamily.Serif)
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        items(recent, key = { it.id }) { book -> Column(Modifier.width(100.dp).clickable { onBook(book.id) }) {
+                        items(recent, key = { it.id }) { book -> Column(Modifier.width(100.dp).clickable { onRead(book.id) }) {
                             BookCover(book, Modifier.fillMaxWidth().height(144.dp))
                             Text(book.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
                         } }
@@ -113,21 +114,26 @@ private fun LibraryBooks(state: LibraryUiState, onBook: (String) -> Unit) {
         item(span = { GridItemSpan(maxLineSpan) }) { Text("All books · ${state.visibleBooks.size}", style = MaterialTheme.typography.titleLarge, fontFamily = FontFamily.Serif) }
         if (state.visibleBooks.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) { Text("No books match. Try another search or filter.") }
         items(state.visibleBooks, key = { it.id }) { book ->
-            if (state.preferences.listView) Row(Modifier.fillMaxWidth().clickable { onBook(book.id) }, horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (state.preferences.listView) Row(Modifier.fillMaxWidth().clickable { onRead(book.id) }, horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 BookCover(book, Modifier.width(65.dp).height(95.dp))
-                Column(Modifier.weight(1f)) { BookCaption(book) }
-            } else Column(Modifier.fillMaxWidth().clickable { onBook(book.id) }, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.weight(1f)) { BookCaption(book, onBook) }
+            } else Column(Modifier.fillMaxWidth().clickable { onRead(book.id) }, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 BookCover(book, Modifier.fillMaxWidth().aspectRatio(0.68f))
-                BookCaption(book)
+                BookCaption(book, onBook)
             }
         }
     }
 }
 
 @Composable
-private fun BookCaption(book: Book) {
-    Text(book.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-    Text(book.author, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    if (book.progression > 0) LinearProgressIndicator(progress = { book.progression.toFloat() }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
-    Text("${book.format.name} · ${book.status.displayName()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun BookCaption(book: Book, onBook: (String) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        Column(Modifier.weight(1f)) {
+            Text(book.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(book.author, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (book.progression > 0) LinearProgressIndicator(progress = { book.progression.toFloat() }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+            Text("${book.format.name} · ${book.status.displayName()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        IconButton(onClick = { onBook(book.id) }) { Icon(Icons.Default.Info, "Book details for ${book.title}") }
+    }
 }

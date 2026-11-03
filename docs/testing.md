@@ -51,8 +51,24 @@ duplicate and damaged-copy recovery, corrupt/large/unsupported inputs, explicit
 private-copy removal, orphan quarantine, metadata bounds and a real SQLite
 `RAISE(ABORT)` failure after file promotion. No fake rendering engine is used.
 
-Reader rendering, annotations/search, orientation/process restoration, API 24,
-and 16 KB devices still require their separate later verification gates.
+### Reader rendering & navigation gate — 2026-11-03
+
+`assembleDebug`, `testDebugUnitTest`, `lintDebug`, and `connectedDebugAndroidTest`
+passed together on API 35 (Android 15), x86_64 emulator (`emulator-5556`).
+The run executed **54 JVM unit tests and 35 Android tests**, with zero failures,
+errors, or skipped tests. Lint reported zero errors and 15 warnings.
+
+Reader Android coverage includes:
+- EPUB WebView text rendering across multiple chapters and formats (standard, image-heavy, RTL, fixed-layout).
+- Real PDFium native ink rendering on vector and scanned PDFs.
+- Full Locator round-trip serialization preserving href, progression, title, and text fragments.
+- Process recreation / configuration changes retaining the exact reading location without resource leaks.
+- Production ViewModel + Room + DataStore integration with conflated asynchronous locator persistence.
+- Bookmark creation, labelling, list observation, navigation, and removal.
+- Reader appearance settings: themes (light, dark, sepia), font size/family, line spacing, margins, and continuous scrolling.
+
+Annotations/search, API 24, and 16 KB devices still require their separate later verification gates.
+
 
 Run from the repository root with JDK 17 and the configured Android SDK installed:
 

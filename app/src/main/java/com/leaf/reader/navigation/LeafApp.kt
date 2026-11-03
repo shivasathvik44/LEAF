@@ -13,6 +13,7 @@ import androidx.navigation.compose.*
 import com.leaf.reader.feature.bookdetails.BookDetailsScreen
 import com.leaf.reader.feature.library.LibraryScreen
 import com.leaf.reader.feature.library.LibraryViewModel
+import com.leaf.reader.feature.reader.ReaderScreen
 
 private val destinations = listOf("Library", "Shelves", "Activity", "Settings")
 
@@ -21,6 +22,7 @@ fun LeafApp(model: LibraryViewModel) {
     val nav = rememberNavController()
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route ?: "Library"
+    val reader = route.startsWith("reader/")
     val message by model.message.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(message) {
@@ -29,8 +31,9 @@ fun LeafApp(model: LibraryViewModel) {
             model.dismissMessage()
         }
     }
-    Scaffold(snackbarHost = { SnackbarHost(snackbar) }, bottomBar = {
-        NavigationBar {
+    Scaffold(contentWindowInsets = if (reader) WindowInsets(0, 0, 0, 0) else ScaffoldDefaults.contentWindowInsets,
+        snackbarHost = { SnackbarHost(snackbar) }, bottomBar = {
+        if (!reader) NavigationBar {
             destinations.forEachIndexed { index, destination ->
                 NavigationBarItem(selected = route == destination || (destination == "Library" && route.startsWith("book/")),
                     onClick = { nav.navigate(destination) { launchSingleTop = true; restoreState = true; popUpTo("Library") { saveState = true } } },
@@ -43,14 +46,17 @@ fun LeafApp(model: LibraryViewModel) {
         NavHost(nav, startDestination = "Library", modifier = Modifier.padding(padding)) {
             composable("Library") {
                 val state by model.state.collectAsStateWithLifecycle()
-                LibraryScreen(state, model) { nav.navigate("book/$it") }
+                LibraryScreen(state, model, onBook = { nav.navigate("book/$it") }, onRead = { nav.navigate("reader/$it") })
             }
             composable("book/{bookId}") { destination ->
                 val id = destination.arguments?.getString("bookId").orEmpty()
                 val state by model.state.collectAsStateWithLifecycle()
                 BookDetailsScreen(state.books.find { it.id == id }, state.loading,
                     onBack = { nav.popBackStack() }, onStatus = { model.setStatus(id, it) },
-                    onRemove = { model.remove(id); nav.popBackStack() })
+                    onRemove = { model.remove(id); nav.popBackStack() }, onOpen = { nav.navigate("reader/$id") })
+            }
+            composable("reader/{bookId}") { destination ->
+                ReaderScreen(destination.arguments?.getString("bookId").orEmpty(), onBack = { nav.popBackStack() })
             }
             destinations.drop(1).forEach { destination ->
                 composable(destination) {

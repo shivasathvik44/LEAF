@@ -22,7 +22,7 @@ alone does not verify rendering, annotation restoration, or daily usability.
   privacy manifest, CI configuration, unit tests, build, lint and device navigation.
 - [x] Phase 1: Room schema, safe managed-file import/quarantine, metadata/covers,
   duplicate handling, library/details/filter/sort/removal verified.
-- [ ] Phase 2: offline EPUB/PDF Fragment rendering, complete Locator persistence,
+- [x] Phase 2: offline EPUB/PDF Fragment rendering, complete Locator persistence,
   restoration, chapters, appearance, immersive controls verified.
 - [ ] Phase 3: bookmarks, rendered EPUB highlights, note editing, EPUB search,
   navigation and restart restoration verified.
@@ -75,3 +75,24 @@ Updated as commands execute; see `docs/testing.md` for the test strategy.
 - Logs are retained locally under ignored `.leaf-tools/verification/` and reports
   under `app/build/`. No production rendering/annotation claim follows from this
   import milestone; those are separate acceptance gates.
+
+### Reader engine and navigation — verified 2026-11-03
+
+- `:app:assembleDebug :app:testDebugUnitTest :app:lintDebug
+  :app:connectedDebugAndroidTest`: passed on API 35, x86_64, 4 KB pages.
+- 54 JVM tests and 35 Android tests passed with zero failures, errors, or skipped tests.
+  Lint: zero errors, 15 warnings.
+- Real native Readium fragment rendering verified for standard EPUBs, image-heavy EPUBs,
+  RTL EPUBs, fixed-layout EPUBs, ordinary vector PDFs, and scanned image PDFs.
+- Native PDF ink rendering verified via pixel inspection on Pdfium surface; page navigation
+  and state recreation verified across configuration changes.
+- EPUB WebView text display verified for body content and chapter traversal.
+- Full Locator JSON round-trip retains exact text fragments, hrefs, progression, and positions.
+- Process death and configuration change restoration verified using `ReaderRestorationFactory`,
+  preventing duplicate native fragment construction and publication resource leaks.
+- ReaderViewModel integration test confirms asynchronous conflated position writer
+  persisting exact locations to Room and DataStore without race conditions across rapid re-open.
+- Bookmark creation with optional labels, listing, deletion, and full-locator navigation verified.
+- Immersive mode system bar transitions, typography customizations (font size, font family,
+  line spacing, margins, continuous scroll, themes) verified.
+
