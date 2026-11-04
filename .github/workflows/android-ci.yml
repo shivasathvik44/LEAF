@@ -31,17 +31,89 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
 
-      - name: Install required Android SDK packages
-        run: sdkmanager --install "platforms;android-37" "build-tools;37.0.0"
+      - name: Environment Diagnostics
+        run: |
+          echo "=== Java Version ==="
+          java -version
+          echo "=== Gradle Wrapper Version ==="
+          ./gradlew --version
+          echo "=== Android Environment ==="
+          echo "ANDROID_HOME: ${ANDROID_HOME:-not set}"
+          echo "ANDROID_SDK_ROOT: ${ANDROID_SDK_ROOT:-not set}"
+          echo "=== Initial SDK Manager Availability ==="
+          command -v sdkmanager || echo "sdkmanager not found in initial PATH"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Locate sdkmanager and install required packages
+        run: |
+          set -euo pipefail
+
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+
+          if [ -z "$SDK_ROOT" ]; then
+            echo "::error::Android SDK root is not configured"
+            exit 1
+          fi
+
+          if [ ! -d "$SDK_ROOT" ]; then
+            sudo mkdir -p "$SDK_ROOT"
+            sudo chown -R "$USER:$USER" "$SDK_ROOT"
+          fi
+
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          export ANDROID_HOME="$SDK_ROOT"
+          export ANDROID_SDK_ROOT="$SDK_ROOT"
+
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" \
+              -type f -name sdkmanager -print -quit 2>/dev/null || true)"
+          fi
+
+          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
+            echo "Installing Android SDK command-line tools..."
+            mkdir -p "$SDK_ROOT/cmdline-tools"
+            TMP_DIR="$(mktemp -d)"
+            curl -sSL "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" -o "$TMP_DIR/cmdline-tools.zip"
+            unzip -q -o "$TMP_DIR/cmdline-tools.zip" -d "$SDK_ROOT/cmdline-tools"
+            rm -rf "$TMP_DIR"
+            if [ -d "$SDK_ROOT/cmdline-tools/cmdline-tools" ]; then
+              rm -rf "$SDK_ROOT/cmdline-tools/latest"
+              mv "$SDK_ROOT/cmdline-tools/cmdline-tools" "$SDK_ROOT/cmdline-tools/latest"
+            fi
+            SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          fi
+
+          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
+            echo "::error::Android SDK command-line tools are missing"
+            exit 1
+          fi
+
+          SDK_BIN="$(dirname "$SDKMANAGER")"
+          echo "$SDK_BIN" >> "$GITHUB_PATH"
+          export PATH="$SDK_BIN:$PATH"
+
+          yes | "$SDKMANAGER" --licenses || true
+
+          "$SDKMANAGER" --version
+          "$SDKMANAGER" --install \
+            "platforms;android-37" \
+            "build-tools;37.0.0"
+
+      - name: Validate Android SDK installation
+        run: |
+          sdkmanager --version
+          sdkmanager --list_installed
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-
-      - name: Make Gradle wrapper executable
-        run: chmod +x gradlew
 
       - name: Build debug APK
         run: ./gradlew --no-daemon --stacktrace :app:assembleDebug
@@ -91,17 +163,89 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
 
-      - name: Install required Android SDK packages
-        run: sdkmanager --install "platforms;android-37" "build-tools;37.0.0"
+      - name: Environment Diagnostics
+        run: |
+          echo "=== Java Version ==="
+          java -version
+          echo "=== Gradle Wrapper Version ==="
+          ./gradlew --version
+          echo "=== Android Environment ==="
+          echo "ANDROID_HOME: ${ANDROID_HOME:-not set}"
+          echo "ANDROID_SDK_ROOT: ${ANDROID_SDK_ROOT:-not set}"
+          echo "=== Initial SDK Manager Availability ==="
+          command -v sdkmanager || echo "sdkmanager not found in initial PATH"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Locate sdkmanager and install required packages
+        run: |
+          set -euo pipefail
+
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+
+          if [ -z "$SDK_ROOT" ]; then
+            echo "::error::Android SDK root is not configured"
+            exit 1
+          fi
+
+          if [ ! -d "$SDK_ROOT" ]; then
+            sudo mkdir -p "$SDK_ROOT"
+            sudo chown -R "$USER:$USER" "$SDK_ROOT"
+          fi
+
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          export ANDROID_HOME="$SDK_ROOT"
+          export ANDROID_SDK_ROOT="$SDK_ROOT"
+
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" \
+              -type f -name sdkmanager -print -quit 2>/dev/null || true)"
+          fi
+
+          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
+            echo "Installing Android SDK command-line tools..."
+            mkdir -p "$SDK_ROOT/cmdline-tools"
+            TMP_DIR="$(mktemp -d)"
+            curl -sSL "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" -o "$TMP_DIR/cmdline-tools.zip"
+            unzip -q -o "$TMP_DIR/cmdline-tools.zip" -d "$SDK_ROOT/cmdline-tools"
+            rm -rf "$TMP_DIR"
+            if [ -d "$SDK_ROOT/cmdline-tools/cmdline-tools" ]; then
+              rm -rf "$SDK_ROOT/cmdline-tools/latest"
+              mv "$SDK_ROOT/cmdline-tools/cmdline-tools" "$SDK_ROOT/cmdline-tools/latest"
+            fi
+            SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          fi
+
+          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
+            echo "::error::Android SDK command-line tools are missing"
+            exit 1
+          fi
+
+          SDK_BIN="$(dirname "$SDKMANAGER")"
+          echo "$SDK_BIN" >> "$GITHUB_PATH"
+          export PATH="$SDK_BIN:$PATH"
+
+          yes | "$SDKMANAGER" --licenses || true
+
+          "$SDKMANAGER" --version
+          "$SDKMANAGER" --install \
+            "platforms;android-37" \
+            "build-tools;37.0.0"
+
+      - name: Validate Android SDK installation
+        run: |
+          sdkmanager --version
+          sdkmanager --list_installed
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-
-      - name: Make Gradle wrapper executable
-        run: chmod +x gradlew
 
       - name: Enable KVM access
         run: |
