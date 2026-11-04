@@ -21,6 +21,7 @@ class ReaderHostFragment : Fragment() {
     private var preferences = ReaderPreferences()
     private var nativeFragment: Fragment? = null
     private var observer: Job? = null
+    private var decorationRestore: Job? = null
     private var attachmentFailed = false
     var onTap: () -> Unit = {}
     var onInteraction: () -> Unit = {}
@@ -72,9 +73,15 @@ class ReaderHostFragment : Fragment() {
 
     private fun observe(navigator: Navigator) {
         val document = retainedDocument ?: return
-        document.attach(navigator)
+        document.attach(navigator, viewLifecycleOwner.lifecycleScope)
         observer?.cancel()
         observer = viewLifecycleOwner.lifecycleScope.launch { navigator.currentLocator.collect(document::accept) }
+        decorationRestore?.cancel()
+        decorationRestore = viewLifecycleOwner.lifecycleScope.launch {
+            try { document.restoreHighlights() }
+            catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (_: Exception) { onError("Saved highlights could not be displayed. Reopen the book to retry.") }
+        }
     }
 
     override fun onResume() { super.onResume(); attachIfReady() }
@@ -83,6 +90,8 @@ class ReaderHostFragment : Fragment() {
         (nativeFragment as? Navigator)?.let { retainedDocument?.accept(it.currentLocator.value) }
         observer?.cancel()
         observer = null
+        decorationRestore?.cancel()
+        decorationRestore = null
         (nativeFragment as? Navigator)?.let { retainedDocument?.detach(it) }
         super.onDestroyView()
     }

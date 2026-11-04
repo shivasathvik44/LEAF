@@ -6,11 +6,14 @@ import com.leaf.reader.data.readium.PublicationAccessException
 import com.leaf.reader.data.readium.PublicationRepository
 import com.leaf.reader.data.readium.ReaderDocument
 import com.leaf.reader.data.readium.ReaderLocation
+import com.leaf.reader.data.readium.ReaderSearchException
+import com.leaf.reader.data.readium.ReaderSearchResult
 import com.leaf.reader.data.repository.AnnotationRepository
 import com.leaf.reader.data.repository.BookRepository
 import com.leaf.reader.data.repository.PreferencesRepository
 import com.leaf.reader.data.repository.ReadingRepository
 import com.leaf.reader.domain.model.ReaderPreferences
+import com.leaf.reader.domain.model.AnnotationLimits
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.File
 import javax.inject.Inject
@@ -40,10 +43,13 @@ class ReaderViewModel @Inject constructor(
     private var bookId: String? = null
     private var opening: Job? = null
     private var seeking: Job? = null
+    private var highlightsJob: Job? = null
     private val observers = mutableListOf<Job>()
     private var writer: PositionWriter? = null
     private var writerBookId: String? = null
     private var latestPosition: Pair<String, ReaderLocation>? = null
+    private var searchJob: Job? = null
+    @Volatile private var searchGeneration = 0L
 
     fun initialize(id: String) {
         if (bookId == id && (opening?.isActive == true || _state.value.document != null)) return
@@ -67,6 +73,9 @@ class ReaderViewModel @Inject constructor(
                 _state.update { it.copy(loading = false, title = book.title, format = book.format, document = document, chapters = document.chapters) }
                 observe { preferences.readerPrefs(id).collect { value -> _state.update { it.copy(preferences = value) } } }
                 observe { annotations.bookmarks(id).collect { value -> _state.update { it.copy(bookmarks = value) } } }
+                observeHighlights(id, document)
+                observe { document.selection.collect { value -> if (_state.value.document === document) _state.update { it.copy(selection = value, annotationError = null) } } }
+                observe { document.activatedHighlight.collect { value -> if (_state.value.document === document) _state.update { it.copy(editingHighlight = value, annotationError = null) } } }
                 observe { document.location.collect { location ->
                     if (location != null) { _state.update { it.copy(location = location) }; writer?.offer(location) }
                 } }
@@ -89,20 +98,154 @@ class ReaderViewModel @Inject constructor(
         launchSaved { annotations.addBookmark(id, location.locatorJson, label.trim().takeIf(String::isNotBlank)); message("Bookmark saved") }
     }
     fun removeBookmark(id: String) { launchSaved { annotations.removeBookmark(id) } }
-    fun goBookmark(json: String) { if (_state.value.document?.go(json) != true) message("That saved location could not be found in this copy.") }
-    fun goChapter(id: Int) { if (_state.value.document?.goChapter(id) != true) message("That chapter could not be opened.") }
-    fun previous() { _state.value.document?.goBackward() }
-    fun next() { _state.value.document?.goForward() }
-    fun goProgression(value: Double) {
+    fun retryHighlights() {
         val document = _state.value.document ?: return
-        seeking?.cancel()
-        seeking = viewModelScope.launch {
+        observeHighlights(bookId ?: return, document)
+    }
+    private fun observeHighlights(id: String, document: ReaderDocument) {
+        highlightsJob?.cancel()
+        _state.update { it.copy(highlightsLoading = true, highlightsError = null) }
+        highlightsJob = viewModelScope.launch {
             try {
-                if (!document.goProgression(value) && _state.value.document === document) message("That reading position is unavailable.")
+                annotations.highlights(id).collect { value ->
+                    _state.update { if (it.document === document) it.copy(highlights = value, highlightsLoading = false, highlightsError = null) else it }
+                    try { document.applyHighlights(value) }
+                    catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) { _state.update { if (it.document === document) it.copy(highlightsError = "Saved highlights could not be displayed. Your annotations have been kept. Please retry.") else it } }
+                }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) {
-                if (_state.value.document === document) message("That reading position could not be opened. Please try again.")
+                _state.update { if (it.document === document) it.copy(highlightsLoading = false, highlightsError = "Highlights and notes could not be loaded. Your saved data has been kept.") else it }
             }
+        }
+    }
+    fun dismissSelection() {
+        if (_state.value.annotationSaving) return
+        _state.value.document?.clearSelectionRequest()
+        _state.update { it.copy(annotationError = null) }
+    }
+    fun saveSelection(color: Long, note: String) {
+        val id = bookId ?: return
+        val document = _state.value.document ?: return
+        val selection = _state.value.selection ?: return
+        if (_state.value.annotationSaving) return
+        try { AnnotationLimits.validateNote(note) }
+        catch (error: IllegalArgumentException) { _state.update { it.copy(annotationError = error.message) }; return }
+        saveAnnotation(document) {
+            annotations.addHighlight(id, selection.locatorJson, selection.selectedText, color, note)
+            if (_state.value.document === document && _state.value.selection === selection) {
+                document.clearSelectionRequest()
+                message("Highlight saved")
+            }
+        }
+    }
+    fun editHighlight(id: String) { _state.update { it.copy(editingHighlight = id, annotationError = null) } }
+    fun closeHighlightEditor() {
+        if (_state.value.annotationSaving) return
+        _state.value.document?.clearHighlightActivation()
+        _state.update { it.copy(editingHighlight = null, annotationError = null) }
+    }
+    fun updateHighlight(id: String, color: Long, note: String) {
+        val document = _state.value.document ?: return
+        if (_state.value.annotationSaving) return
+        try { AnnotationLimits.validateNote(note) }
+        catch (error: IllegalArgumentException) { _state.update { it.copy(annotationError = error.message) }; return }
+        saveAnnotation(document) {
+            annotations.updateHighlight(id, color, note)
+            if (_state.value.document === document && _state.value.editingHighlight == id) {
+                document.clearHighlightActivation()
+                _state.update { it.copy(editingHighlight = null) }
+            }
+        }
+    }
+    fun deleteHighlight(id: String) {
+        val document = _state.value.document ?: return
+        if (_state.value.annotationSaving) return
+        saveAnnotation(document) {
+            annotations.deleteHighlight(id)
+            if (_state.value.document === document && _state.value.editingHighlight == id) {
+                document.clearHighlightActivation()
+                _state.update { it.copy(editingHighlight = null) }
+            }
+        }
+    }
+    private fun saveAnnotation(document: ReaderDocument, action: suspend () -> Unit) {
+        _state.update { it.copy(annotationSaving = true, annotationError = null) }
+        viewModelScope.launch {
+            try { action() }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                if (_state.value.document === document) _state.update { it.copy(annotationError =
+                    if (error is IllegalArgumentException) error.message ?: "This annotation is invalid. Review it before saving."
+                    else "This annotation could not be saved. Your draft has been kept. Please retry.") }
+            } finally {
+                if (_state.value.document === document) _state.update { it.copy(annotationSaving = false) }
+            }
+        }
+    }
+    fun changeSearchQuery(value: String) {
+        stopSearch(markStopped = false)
+        if (value.length > 200) {
+            _state.update { it.copy(searchQueryRejected = true, searchError = "Search phrases can contain up to 200 characters.", searchStarted = false, searchResults = emptyList()) }
+        } else {
+            _state.update { it.copy(searchQuery = value, searchQueryRejected = false, searchStarted = false, searchError = null, searchResults = emptyList()) }
+        }
+    }
+    fun search() {
+        val document = _state.value.document ?: return
+        if (_state.value.searchQueryRejected) return
+        stopSearch(markStopped = false)
+        val query = _state.value.searchQuery.trim()
+        _state.update { it.copy(searchResults = emptyList(), searchRunning = query.isNotEmpty(), searchStarted = query.isNotEmpty(), searchError = null, searchStopped = false) }
+        if (query.isEmpty()) return
+        val generation = searchGeneration
+        searchJob = viewModelScope.launch {
+            try {
+                document.clearSearchDecorations()
+                document.search(query) { page -> _state.update {
+                    if (it.document === document && searchGeneration == generation) it.copy(searchResults = it.searchResults + page) else it
+                } }
+            }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { _state.update {
+                if (it.document === document && searchGeneration == generation) it.copy(searchError = (error as? ReaderSearchException)?.displayMessage ?: "This search could not be completed. Try another phrase.") else it
+            } }
+            finally { _state.update {
+                if (it.document === document && searchGeneration == generation) it.copy(searchRunning = false) else it
+            } }
+        }
+    }
+    fun cancelSearch() { stopSearch(markStopped = true) }
+    private fun stopSearch(markStopped: Boolean) {
+        searchGeneration++
+        searchJob?.cancel(); searchJob = null
+        _state.update { it.copy(searchRunning = false, searchStopped = markStopped && (it.searchRunning || it.searchStopped)) }
+    }
+    fun goSearchResult(result: ReaderSearchResult) {
+        val document = _state.value.document ?: return
+        cancelSearch()
+        navigate(document, "That matching passage could not be opened.") { goSearchResult(result) }
+    }
+    fun goBookmark(json: String) {
+        val document = _state.value.document ?: return
+        navigate(document, "That saved location could not be found in this copy.") { go(json) }
+    }
+    fun goChapter(id: Int) {
+        val document = _state.value.document ?: return
+        navigate(document, "That chapter could not be opened.") { goChapter(id) }
+    }
+    fun previous() { seeking?.cancel(); _state.value.document?.goBackward() }
+    fun next() { seeking?.cancel(); _state.value.document?.goForward() }
+    fun goProgression(value: Double) {
+        val document = _state.value.document ?: return
+        navigate(document, "That reading position is unavailable.") { goProgression(value) }
+    }
+    private fun navigate(document: ReaderDocument, unavailable: String, action: suspend ReaderDocument.() -> Boolean) {
+        seeking?.cancel()
+        seeking = viewModelScope.launch {
+            try { if (!document.action() && _state.value.document === document) message(unavailable) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { if (_state.value.document === document) message("That reading position could not be opened. Please try again.") }
         }
     }
     private fun observe(action: suspend () -> Unit) { observers += viewModelScope.launch {
@@ -116,6 +259,7 @@ class ReaderViewModel @Inject constructor(
 
     fun closeReader() {
         seeking?.cancel(); seeking = null
+        highlightsJob?.cancel(); highlightsJob = null
         val location = _state.value.document?.currentLocation() ?: _state.value.location
         val currentBook = bookId
         if (location != null && currentBook != null) {
@@ -123,6 +267,7 @@ class ReaderViewModel @Inject constructor(
             writer?.offer(location)
         }
         opening?.cancel(); opening = null
+        stopSearch(markStopped = false)
         observers.forEach(Job::cancel); observers.clear()
         // Keep one actor per book across rapid screen reopenings. A newer position cannot
         // otherwise be overwritten by an older screen's still-draining writer.

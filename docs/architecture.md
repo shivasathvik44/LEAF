@@ -49,7 +49,46 @@ Readium's stable Fragment-based EPUB and PDF navigators are hosted from Compose.
 
 Persist the complete Readium locator as JSON; progression is a derived value for library display and sorting. A page number is insufficient for reflowable EPUBs. Restore the locator after navigator creation, with a best-effort fallback when content changes or a saved location is invalid.
 
+Locator navigation holds a publication operation lease while selecting a native
+resource. For reflowable EPUBs, it waits for a fresh public `PaginationListener`
+event for the target resource, then reapplies the complete destination locator
+within that resource. This works around Readium 3.4's delayed resource-page
+listener overriding backward jumps with the chapter's final page. Each event has
+a revision and navigator generation, so rapid A → B → A requests remain observable
+even if a debounced locator `StateFlow` would conflate identical final values.
+The wait is cancellable and bounded to ten seconds; it verifies that the reader
+and navigator are still current before the second request. Bookmark, highlight,
+chapter, progression and search-result jumps share this path. The ViewModel
+cancels its previous navigation job when a newer jump supersedes it or the reader
+closes. Strict viewport checks verify saved-passage backward navigation and rapid
+chapter requests in the Phase 3 local gate.
+
 EPUB text selection must yield real Readium locations. Saved highlights must be restored as navigator decorations; storing a database row alone is not a rendered annotation. PDF text highlighting and unverified PDF search are excluded from v1.0.
+
+`ReaderDocument` isolates selection, decoration and search APIs. A native EPUB
+selection action yields the complete locator JSON and selected text. Domain
+annotations use opaque JSON rather than Readium classes; the ViewModel observes
+Room and reapplies colored decorations after the native navigator is attached.
+Decoration activation opens the corresponding saved annotation. Fixed-layout
+EPUBs retain publisher layout and do not offer unsupported text selection.
+
+The annotation repository validates UTF-8 field sizes before writing. Highlight
+creation with a note, and color/note edits, share one Room transaction. A failed
+write leaves existing records intact; the UI retains the draft for retry.
+The Phase 3 changes use existing schema-1 tables and require no migration.
+
+EPUB search uses Readium's string search service with a bounded ICU matching
+algorithm. It retains Readium's extraction/context/locator pipeline while rejecting
+too many matches or pathological unbroken snippet context before constructing an
+unbounded result set. Iterator traversal runs on a background dispatcher, closes
+the iterator in `finally`, and holds an operation lease so reader closure cannot
+close the publication underneath the search. Cancellation and document/query
+generation checks prevent stale results from replacing the current reader state.
+A cumulative 8 MiB UTF-8 limit bounds the full locator JSON and display text kept
+in results; exceeding it asks the user to refine the phrase without truncating
+locators. The feature specification records all input and result limits. Search
+navigation uses the real result locator and a temporary navigator decoration
+where supported.
 
 ## Session accounting
 

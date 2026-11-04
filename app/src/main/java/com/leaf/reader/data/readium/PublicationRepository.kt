@@ -115,7 +115,13 @@ class PublicationRepository @Inject constructor(
                 ) {
                     throw PublicationAccessException(PublicationAccessProblem.UNSUPPORTED_FORMAT)
                 }
-                val opened = opener.open(retrieved, allowUserInteraction = false)
+                val opened = opener.open(
+                    retrieved,
+                    allowUserInteraction = false,
+                    // Use the per-open hook: Readium 3.4.0 shadows its constructor hook
+                    // inside PublicationOpener.open(), so only this hook is reliably invoked.
+                    onCreatePublication = { configureBoundedEpubSearch() },
+                )
                     .getOrElse { throw accessException(it) }
                 publication = opened
                 // Successful Publication creation transfers its asset/container ownership.

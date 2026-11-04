@@ -92,6 +92,58 @@ Process death, immersive system-bar transitions, complete theme/appearance visua
 QA, annotations/search, API 24/37, and 16 KB devices remain separate verification
 gates. No CI execution or production release signing is claimed.
 
+### Annotations and search gate — verified locally 2026-11-04
+
+`assembleDebug`, `testDebugUnitTest`, `lintDebug` and `connectedDebugAndroidTest`
+passed together on API 35, x86_64, 4 KB pages. The final run executed **57 JVM
+tests and 61 Android tests**, with zero failures, errors or skipped tests. Lint
+reported zero errors and 16 warnings. Raw local log:
+`.leaf-tools/verification/phase3-check-3.log`.
+
+Phase 3 adds three JVM tests for exact annotation byte limits, seven isolated
+file-backed Room tests, native EPUB annotation/search tests and four production
+`MainActivity` reader UI tests. These tests use actual Readium, Room, DataStore and
+Compose; they do not replace the renderer or selection with a fake implementation.
+Native UI tests operate only on their own UUID book records and fixture files.
+
+Verified coverage includes:
+
+- Real long-press selection through the native Highlight action, persisted selected
+  text/full locator, note editing, decoration removal and fresh native navigator
+  restoration. Production UI assertions check the decoration's RGB color and
+  intersection with the actual visual viewport, backward saved-passage navigation,
+  and a real tap on the decoration opening its note editor.
+- Exact UTF-8 size boundaries, full-locator/note persistence after database reopen,
+  stable highlight/note IDs, note cascade, blank-note clearing and oversize rejection.
+- Real SQLite `RAISE(ABORT)` failures that must roll back new highlights or color
+  changes with their notes; the production editor retains a failed-save draft
+  and allows retry without duplicate data.
+- Contextual EPUB results, no-results state, real result navigation, explicit broad
+  query/context errors, and iterator/publication lifetime during cancellation/close.
+- A real Readium result-payload test with 100 matches and a roughly 64 KiB chapter
+  title, verifying the cumulative 8 MiB UTF-8 locator/display-text guard fails
+  explicitly even when the match-count limit has not been reached.
+- Rapid chapter requests within one UI turn returning to the original chapter's
+  visible opening passage. The test observes a stable result beyond Readium's
+  pagination debounce, so a delayed callback cannot move it to the chapter end.
+
+Strict production UI visibility checks exposed a Readium 3.4 backward-resource
+jump that selected the saved chapter but settled on its final page. The verified
+correction waits for a fresh public `PaginationListener` revision from the current
+navigator generation, then reapplies the full locator through the shared
+cancellable navigation path. This also handles rapid A → B → A requests whose
+identical final locator can be conflated by a debounced `StateFlow`.
+
+The debug APK is `app/build/outputs/apk/debug/app-debug.apk`, SHA-256
+`b802488a61eafadea4fc8a4a5b21a423de06b1890385b2b064dcab10bbe79419`.
+
+Fixed-layout EPUB text selection is unsupported by the chosen navigator. EPUB
+search operates on available text and performs no OCR; PDF annotation/search are
+excluded. File-backed database reopening, fresh native navigator creation and
+`ActivityScenario.recreate()` cover persistence and configuration restoration, not
+OS process death. API 24/37, 16 KB devices, full accessibility, immersive system
+bars, complete appearance QA, remote CI and release signing remain separate gates.
+
 ## Commands
 
 Run from the repository root with JDK 17 and the configured Android SDK installed:

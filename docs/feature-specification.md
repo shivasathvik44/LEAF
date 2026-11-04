@@ -35,12 +35,28 @@ PDFs expose only settings their engine supports; EPUB typography is not applied.
 ## Annotations and search
 
 Bookmarks include full locator JSON, optional labels and creation timestamps.
-EPUB selection creates highlights using actual Readium selection locations, with
-multiple colors and rendered decorations restored on reopen. Notes belong to
-highlights, support editing/deletion, and remain private. Lists navigate back to
-the original locator. EPUB search uses the publication search service with loading,
-contextual results, cancellation, empty/error states and result navigation.
-PDF highlights and PDF search are outside the v1.0 support contract.
+Reflowable-EPUB selection creates highlights using actual Readium selection
+locations, with gold, green, blue and pink colors and rendered decorations restored
+on reopen. Notes belong to highlights, support editing/deletion, and remain private.
+Lists navigate back to the original locator. A failed database save keeps the
+visible draft available for retry and rolls back related writes together.
+The selected Readium navigator does not support text selection for fixed-layout
+EPUBs; Leaf explains this limitation instead of offering unsupported creation.
+
+EPUB search uses the publication search service with loading, contextual results,
+cancellation, empty/error states and result navigation. It can search text in
+fixed-layout EPUBs where the publication exposes searchable content. Images do not
+receive OCR. PDF highlights and PDF search are outside the v1.0 support contract.
+
+Annotation storage accepts up to 64 KiB each of selected text and note content,
+256 KiB of full locator JSON, and 4 KiB of bookmark label, measured in UTF-8 bytes.
+Oversized input is rejected with an explanation and is never silently truncated.
+Search accepts 200 characters in the UI (512 at the integration boundary), with
+at most 1,000 matches in one resource, 5,000 overall, and a 4,096-character limit
+on unbroken context extension. Retained results have a cumulative 8 MiB UTF-8
+payload limit, counting full locator JSON, display titles, and before/match/after
+text. Reaching any search limit produces an explicit recoverable error asking for
+a more specific phrase; partial search results are identified as incomplete.
 
 ## Shelves and activity
 

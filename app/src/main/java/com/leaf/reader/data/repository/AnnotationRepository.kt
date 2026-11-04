@@ -7,6 +7,7 @@ import com.leaf.reader.data.local.database.entity.HighlightEntity
 import com.leaf.reader.data.local.database.entity.NoteEntity
 import com.leaf.reader.domain.model.Bookmark
 import com.leaf.reader.domain.model.Highlight
+import com.leaf.reader.domain.model.AnnotationLimits
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -24,6 +25,8 @@ class AnnotationRepository @Inject constructor(private val database: LeafDatabas
 
     suspend fun addBookmark(bookId: String, locatorJson: String, label: String? = null): String {
         require(locatorJson.isNotBlank()) { "The complete locator JSON is required." }
+        AnnotationLimits.validateLocator(locatorJson)
+        AnnotationLimits.validateLabel(label)
         return database.withTransaction {
             database.annotations().bookmarkAt(bookId, locatorJson)?.id ?: UUID.randomUUID().toString().also { id ->
                 database.annotations().insertBookmark(BookmarkEntity(id, bookId, locatorJson, label, System.currentTimeMillis()))
@@ -35,6 +38,9 @@ class AnnotationRepository @Inject constructor(private val database: LeafDatabas
     suspend fun addHighlight(bookId: String, locatorJson: String, selectedText: String, color: Long, note: String? = null): String {
         require(locatorJson.isNotBlank()) { "The selection locator JSON is required." }
         require(selectedText.isNotBlank()) { "Select text before creating a highlight." }
+        AnnotationLimits.validateLocator(locatorJson)
+        AnnotationLimits.validateSelection(selectedText)
+        AnnotationLimits.validateNote(note)
         require(color in 0L..0xFFFFFFFFL) { "Use an ARGB highlight color." }
         val id = UUID.randomUUID().toString()
         database.withTransaction {
@@ -45,6 +51,7 @@ class AnnotationRepository @Inject constructor(private val database: LeafDatabas
     }
 
     suspend fun updateHighlight(id: String, color: Long, note: String?) {
+        AnnotationLimits.validateNote(note)
         require(color in 0L..0xFFFFFFFFL) { "Use an ARGB highlight color." }
         database.withTransaction {
             requireNotNull(database.annotations().getHighlight(id)) { "This highlight no longer exists." }
@@ -53,6 +60,7 @@ class AnnotationRepository @Inject constructor(private val database: LeafDatabas
         }
     }
     suspend fun updateNote(highlightId: String, content: String?) {
+        AnnotationLimits.validateNote(content)
         database.withTransaction {
             requireNotNull(database.annotations().getHighlight(highlightId)) { "This highlight no longer exists." }
             saveNote(highlightId, content)

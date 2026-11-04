@@ -25,8 +25,9 @@ alone does not verify rendering, annotation restoration, or daily usability.
 - [x] Phase 2 local reader gate: offline EPUB/PDF Fragment rendering, full Locator
   persistence, configuration restoration, chapters and appearance controls.
   Process-death and full immersive-UI checks remain release verification tasks.
-- [ ] Phase 3: bookmarks, rendered EPUB highlights, note editing, EPUB search,
-  navigation and restart restoration verified.
+- [x] Phase 3 local gate: bookmarks, rendered reflowable-EPUB highlights, note
+  editing, EPUB search, saved-passage navigation, database/fresh-navigator reopen
+  and configuration recreation verified. OS process-death remains a release check.
 - [ ] Phase 4: shelves and active foreground reading statistics verified.
 - [ ] Phase 5: reliability, migrations, accessibility, security/license review,
   documentation, tests, CI and installable release artifact verified.
@@ -115,4 +116,44 @@ Updated as commands execute; see `docs/testing.md` for the test strategy.
   x86_64, 4 KB pages. Log: `.leaf-tools/verification/phase2-review-check-1.log`.
 - Actual process death, production reader-chrome/system-bar behavior, complete
   theme/appearance visual QA, API 24/37 and 16 KB devices remain unverified.
+
+### Annotations and search — verified locally 2026-11-04
+
+- Integrated Readium's native reflowable-EPUB selection menu with persisted full
+  selection locators, four highlight colors, rendered decorations and personal
+  notes. Readers can browse annotations, return to the passage, edit notes/colors,
+  and delete a highlight with its note. Saved decorations are reapplied to a new
+  navigator. Fixed-layout EPUB selection is unavailable in the selected toolkit;
+  its annotation panel explains this limit. PDF highlighting/search are excluded.
+- Added actual EPUB publication search with contextual results, navigation,
+  loading/empty/error states, cancellation and stale-result guards. Search work
+  runs off the main thread and iterators close before publication leases release.
+- Corrected Readium 3.4's backward-resource jump behavior: wait for a fresh public
+  pagination callback for the target resource, then reapply the complete locator
+  after its resource-page callback. Revisions and navigator generations handle
+  rapid A → B → A requests without relying on debounced locator values. Saved
+  annotations/bookmarks, chapters, progress and search share the same cancellable,
+  publication-leased path.
+- Added explicit input bounds: selection and note 64 KiB each, full locator
+  256 KiB, bookmark label 4 KiB, measured as UTF-8 bytes without truncation.
+  Search limits are 200 query characters in the UI, 512 in the integration,
+  1,000 matches per resource, 5,000 overall and 4,096 characters of unbroken
+  context extension. Retained results have a cumulative 8 MiB UTF-8 payload limit
+  across full locator JSON, display titles and before/match/after context.
+  Limit failures ask for a narrower phrase; reading stays open.
+- Added isolated file-backed Room tests for full-locator/note restoration, stable
+  IDs, cascading deletion, oversize rejection and real SQLite transaction aborts.
+  Production reader UI coverage exercises real selection, color/note editing,
+  recreation, search navigation and retry after a database failure. Strict native
+  viewport/color assertions verify actual visible decorations, backward navigation
+  from saved annotations, decoration activation and rapid chapter requests.
+- Full gate passed: **57 JVM tests and 61 Android tests**, zero failures/errors/skips,
+  debug APK assembly and lint with zero errors (16 warnings). Device: API 35,
+  x86_64, 4 KB pages. Log: `.leaf-tools/verification/phase3-check-3.log`.
+- Debug APK: `app/build/outputs/apk/debug/app-debug.apk`;
+  SHA-256 `b802488a61eafadea4fc8a4a5b21a423de06b1890385b2b064dcab10bbe79419`.
+- Database reopening, fresh native navigator creation and configuration recreation
+  do not establish OS process-death recovery. API 24/37, 16 KB devices, full
+  accessibility, immersive system bars, complete appearance QA, remote CI and
+  production release signing remain separate gates.
 

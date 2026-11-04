@@ -9,6 +9,7 @@ import android.os.SystemClock
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
+import androidx.lifecycle.lifecycleScope
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -22,7 +23,10 @@ import java.io.File
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -75,7 +79,7 @@ class ReaderEngineTest {
         launch("standard.epub", PublicationFormat.EPUB)
         await { activity -> activity.document?.currentLocation() != null }
         awaitWebText("silver fern")
-        scenario!!.onActivity { activity -> assertTrue(activity.document!!.goChapter(2)) }
+        goChapter(2)
         await { activity -> activity.document?.currentLocation()?.locatorJson?.contains("chapter3") == true }
         var before: String? = null
         scenario!!.onActivity { before = it.document!!.currentLocation()!!.locatorJson }
@@ -93,7 +97,7 @@ class ReaderEngineTest {
     @Test fun epubTypographyChangesKeepMeaningfulLocator() {
         launch("standard.epub", PublicationFormat.EPUB)
         await { it.document?.currentLocation() != null }
-        scenario!!.onActivity { activity -> assertTrue(activity.document!!.goChapter(1)) }
+        goChapter(1)
         await { it.document?.currentLocation()?.locatorJson?.contains("chapter2") == true }
         val originalFontSize = webValue("parseFloat(getComputedStyle(document.body).fontSize)").toDouble()
         scenario!!.onActivity { it.typography(ReaderPreferences(theme = ReaderTheme.DARK, fontSize = 180.0,
@@ -120,7 +124,7 @@ class ReaderEngineTest {
         await { it.document?.currentLocation() != null }
         awaitWebText("هذه حديقة هادئة")
         awaitWebCondition("getComputedStyle(document.documentElement).direction === 'rtl'")
-        scenario!!.onActivity { assertTrue(it.document!!.goChapter(1)) }
+        goChapter(1)
         awaitWebText("هذه هي الصفحة الأخيرة من القصة")
         scenario!!.onActivity { assertNull(it.failure) }
     }
@@ -136,7 +140,7 @@ class ReaderEngineTest {
         }
         awaitWebText("This page uses a 600 by 800 viewport")
         assertEquals(originalSize, webValue("getComputedStyle(document.body).fontSize"))
-        scenario!!.onActivity { assertTrue(it.document!!.goChapter(1)) }
+        goChapter(1)
         awaitWebText("LEAF-FXL-TWO")
         scenario!!.onActivity { assertNull(it.failure) }
     }
@@ -144,7 +148,7 @@ class ReaderEngineTest {
     @Test fun orientationChangeReopensTheSameMeaningfulChapter() {
         launch("standard.epub", PublicationFormat.EPUB)
         await { it.document?.currentLocation() != null }
-        scenario!!.onActivity { activity -> assertTrue(activity.document!!.goChapter(1)) }
+        goChapter(1)
         await { it.document?.currentLocation()?.locatorJson?.contains("chapter2") == true }
         scenario!!.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
         await { activity -> activity.window.decorView.width > activity.window.decorView.height && activity.document?.currentLocation()?.locatorJson?.contains("chapter2") == true }
@@ -185,6 +189,17 @@ class ReaderEngineTest {
     private fun fixture(name: String): File = File(directory, name).also { file ->
         instrumentation.context.assets.open("publications/$name").use { input -> file.outputStream().use(input::copyTo) }
     }
+    private fun goChapter(id: Int) = runBlocking {
+        val result = CompletableDeferred<Boolean>()
+        scenario!!.onActivity { activity ->
+            activity.lifecycleScope.launch {
+                try { result.complete(activity.document!!.goChapter(id)) }
+                catch (failure: Throwable) { result.completeExceptionally(failure) }
+            }
+        }
+        assertTrue(withTimeout(15_000) { result.await() })
+    }
+
     private fun launch(name: String, format: PublicationFormat) {
         scenario = ActivityScenario.launch(Intent(context, ReaderHarnessActivity::class.java)
             .putExtra("fixturePath", fixture(name).absolutePath).putExtra("fixtureFormat", format.name))

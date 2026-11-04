@@ -6,6 +6,13 @@ Leaf is a native, offline-first Android ebook reader for a personal EPUB and PDF
 
 Leaf is being implemented from an empty repository. It is **not a completed v1.0 release**. Feature availability and verification must be checked against [the implementation checklist](docs/implementation-checklist.md) and [testing notes](docs/testing.md). A successful compilation alone does not establish that importing, rendering, annotations, or position restoration work on a device.
 
+Library/import, the reader and Phase 3 annotations/search have passed local checks
+on API 35: 57 JVM tests, 61 Android tests, debug assembly and zero lint errors.
+Phase 3 includes reflowable-EPUB text selection, colored highlights, notes and
+contextual EPUB search. Fixed-layout EPUB text selection and PDF highlighting/search
+are unsupported. Shelves, reading activity and release hardening remain later
+milestones; OS process death and the wider device matrix still need verification.
+
 ## Build
 
 Install JDK 17 and Android SDK 37. Leaf's selected foundation toolchain is Gradle 9.8.2, Android Gradle Plugin 9.3.1, Kotlin/Compose compiler 2.4.20, and Readium 3.4.0, with minimum SDK 24 and target SDK 37. Compatibility and successful build verification remain milestone gates. Set `ANDROID_HOME` or create an untracked `local.properties` containing `sdk.dir=/absolute/path/to/android-sdk`.

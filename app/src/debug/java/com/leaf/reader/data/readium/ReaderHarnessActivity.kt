@@ -9,6 +9,14 @@ import com.leaf.reader.core.util.PublicationFormat
 import com.leaf.reader.domain.model.ReaderPreferences
 import java.io.File
 import kotlinx.coroutines.launch
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
+import com.leaf.reader.data.repository.AnnotationRepository
+import com.leaf.reader.data.repository.BookRepository
+import com.leaf.reader.data.repository.ReadingRepository
+import com.leaf.reader.data.repository.PreferencesRepository
 
 /** Debug-only test entry point. It cannot be launched by another application. */
 class ReaderHarnessActivity : FragmentActivity() {
@@ -29,8 +37,11 @@ class ReaderHarnessActivity : FragmentActivity() {
         val locator = savedInstanceState?.getString("locatorJson") ?: intent.getStringExtra("locatorJson")
         lifecycleScope.launch {
             try {
+                val bookId = intent.getStringExtra("bookId")
+                val dependencies = if (bookId != null) EntryPointAccessors.fromApplication(applicationContext, ReaderHarnessDependencies::class.java) else null
+                val restored = locator ?: bookId?.let { dependencies?.reading()?.getProgress(it)?.locatorJson }
                 val publication = PublicationRepository(applicationContext).open(file)
-                val opened = ReaderDocument(publication, format, locator)
+                val opened = ReaderDocument(publication, format, restored)
                 document = opened
                 val fragment = (supportFragmentManager.findFragmentByTag("reader-host") as? ReaderHostFragment)
                     ?: ReaderHostFragment().also {
@@ -39,6 +50,10 @@ class ReaderHarnessActivity : FragmentActivity() {
                 host = fragment
                 fragment.onError = { failure = it }
                 fragment.bind(opened, preferences)
+                if (bookId != null && dependencies != null) {
+                    launch { dependencies.annotations().highlights(bookId).collect { opened.applyHighlights(it) } }
+                    launch { opened.location.collect { location -> if (location != null) dependencies.reading().saveProgress(bookId, location.locatorJson, location.progression) } }
+                }
             } catch (error: Exception) { failure = "Publication could not be opened by the reader harness." }
         }
     }
@@ -73,4 +88,13 @@ class ReaderHarnessActivity : FragmentActivity() {
         if (ownsDocument) document?.releaseOwner()
         document = null
     }
+}
+
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface ReaderHarnessDependencies {
+    fun annotations(): AnnotationRepository
+    fun books(): BookRepository
+    fun reading(): ReadingRepository
+    fun preferences(): PreferencesRepository
 }

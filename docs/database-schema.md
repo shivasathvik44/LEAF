@@ -27,6 +27,15 @@ Book foreign keys cascade to progress, bookmarks, highlights, shelf memberships,
 
 Full progress and status changes share a Room transaction. Bookmark insertion deduplicates exact locator JSON inside a transaction. Highlight/note creation and editing are transactional. Checkpoint writes accept a caller-supplied UUID for idempotent retry; reusing that UUID for a different interval is rejected. Imports must coordinate managed-file finalization with an aborting unique book insert and explicit recovery; SQLite and the file system are not one atomic transaction.
 
+Phase 3 uses the existing annotation tables without changing schema version 1.
+Repository validation rejects oversized UTF-8 values before writes: 64 KiB each
+for selected text and notes, 256 KiB for locator JSON, and 4 KiB for bookmark labels.
+Values within the limits are kept intact. Updating a note preserves its UUID;
+clearing blank note content removes only the note, and deleting its highlight
+cascades to that note. Color and note updates either commit together or roll back
+together. File-backed repository tests close and reopen the database and inject
+actual SQLite insert/update failures to exercise preservation and rollback.
+
 Reading sessions are closed, observed checkpoints rather than persisted running timers. Active duration must be positive and no larger than its wall interval. The reader must submit only unlocked foreground activity and normalize active intervals for statistics; background/process-death time is never inferred from an open database timestamp.
 
 ## Migration policy
