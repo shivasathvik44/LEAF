@@ -18,6 +18,8 @@ import com.leaf.reader.data.repository.AnnotationRepository
 import com.leaf.reader.data.repository.BookRepository
 import com.leaf.reader.data.repository.PreferencesRepository
 import com.leaf.reader.data.repository.ReadingRepository
+import com.leaf.reader.data.repository.ReadingActivityRecorderFactory
+import com.leaf.reader.data.repository.StatisticsRepository
 import com.leaf.reader.domain.model.Book
 import com.leaf.reader.feature.reader.ReaderViewModel
 import java.io.File
@@ -47,11 +49,13 @@ class ReaderViewModelIntegrationTest {
     private lateinit var database: LeafDatabase
     private lateinit var reading: ReadingRepository
     private lateinit var annotations: AnnotationRepository
+    private lateinit var statistics: StatisticsRepository
     private lateinit var store: ViewModelStore
     private lateinit var model: ReaderViewModel
     private lateinit var scenario: ActivityScenario<ReaderHarnessActivity>
     private lateinit var preferenceJob: Job
     private lateinit var id: String
+    private var becameEligible = false
 
     @Before fun setUp() = runBlocking {
         directory = File(context.cacheDir, "reader-viewmodel-tests/${UUID.randomUUID()}").apply { check(mkdirs()) }
@@ -61,6 +65,7 @@ class ReaderViewModelIntegrationTest {
         val books = BookRepository(database)
         reading = ReadingRepository(database)
         annotations = AnnotationRepository(database)
+        statistics = StatisticsRepository(database)
         preferenceJob = SupervisorJob()
         val preferences = PreferencesRepository(PreferenceDataStoreFactory.create(
             scope = CoroutineScope(preferenceJob + Dispatchers.IO), produceFile = { File(directory, "reader.preferences_pb") }))
@@ -75,7 +80,8 @@ class ReaderViewModelIntegrationTest {
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
                     require(modelClass == ReaderViewModel::class.java)
                     @Suppress("UNCHECKED_CAST")
-                    return ReaderViewModel(books, PublicationRepository(context), reading, preferences, annotations) as T
+                    return ReaderViewModel(books, PublicationRepository(context), reading, preferences, annotations,
+                        ReadingActivityRecorderFactory(context, statistics)) as T
                 }
             })[ReaderViewModel::class.java]
             model.initialize(id)
@@ -85,9 +91,16 @@ class ReaderViewModelIntegrationTest {
     }
 
     @After fun tearDown() = runBlocking {
+        val closingAt = System.currentTimeMillis()
         if (this@ReaderViewModelIntegrationTest::scenario.isInitialized) {
             scenario.onActivity { if (this@ReaderViewModelIntegrationTest::store.isInitialized) store.clear() }
             scenario.close()
+        }
+        if (becameEligible && this@ReaderViewModelIntegrationTest::statistics.isInitialized) {
+            // The real recorder's final closed interval drains independently of store.clear().
+            withTimeout(10_000) { statistics.sessions.first { rows ->
+                rows.any { it.bookId == id && it.endedAt >= closingAt - 1_000L }
+            } }
         }
         if (this@ReaderViewModelIntegrationTest::preferenceJob.isInitialized) preferenceJob.cancelAndJoin()
         if (this@ReaderViewModelIntegrationTest::database.isInitialized) database.close()
@@ -145,6 +158,9 @@ class ReaderViewModelIntegrationTest {
     private fun bindReadyDocument() {
         await { model.state.value.document != null }
         scenario.onActivity { it.bindExternal(requireNotNull(model.state.value.document), model.state.value.preferences) }
+        await { model.state.value.contentReady && it.hasWindowFocus() }
+        scenario.onActivity { model.foregroundEligible(true) }
+        becameEligible = true
     }
     private fun awaitChapter(name: String) = await { activity ->
         activity.document?.currentLocation()?.locatorJson?.contains(name) == true && model.state.value.location?.locatorJson?.contains(name) == true

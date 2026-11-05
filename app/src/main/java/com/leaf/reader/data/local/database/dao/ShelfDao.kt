@@ -14,6 +14,9 @@ import kotlinx.coroutines.flow.Flow
 interface ShelfDao {
     @Transaction @Query("SELECT * FROM shelves ORDER BY name COLLATE NOCASE, id")
     fun observeShelves(): Flow<List<ShelfWithMemberships>>
+    @Query("SELECT * FROM shelves WHERE id = :id") suspend fun get(id: String): ShelfEntity?
+    @Query("SELECT * FROM shelves WHERE name = :name COLLATE NOCASE LIMIT 1")
+    suspend fun findByName(name: String): ShelfEntity?
     @Insert suspend fun insert(shelf: ShelfEntity)
     @Query("UPDATE shelves SET name = :name, description = :description WHERE id = :id")
     suspend fun update(id: String, name: String, description: String)

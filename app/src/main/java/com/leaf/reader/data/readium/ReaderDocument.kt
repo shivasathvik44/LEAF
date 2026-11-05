@@ -1,6 +1,13 @@
 package com.leaf.reader.data.readium
 
 import androidx.fragment.app.Fragment
+import com.github.barteksc.pdfviewer.PDFView
+import android.graphics.Rect
+import android.net.Uri
+import android.view.View
+import android.view.ViewGroup
+import android.view.ViewTreeObserver
+import android.webkit.WebView
 import android.view.ActionMode
 import android.view.Menu
 import android.view.MenuItem
@@ -38,6 +45,7 @@ import org.readium.r2.navigator.epub.EpubPreferences
 import org.readium.r2.navigator.input.InputListener
 import org.readium.r2.navigator.input.TapEvent
 import org.readium.r2.navigator.input.DragEvent
+import org.readium.r2.navigator.input.KeyEvent
 import org.readium.r2.navigator.pdf.PdfNavigatorFactory
 import org.readium.r2.navigator.pdf.PdfNavigatorFragment
 import org.readium.r2.navigator.preferences.Axis
@@ -88,6 +96,15 @@ class ReaderDocument(
     }
     private val _location = MutableStateFlow<ReaderLocation?>(null)
     val location: StateFlow<ReaderLocation?> = _location
+    private val _rendered = MutableStateFlow(false)
+    val rendered: StateFlow<Boolean> = _rendered
+    private var readyReflowPath: String? = null
+    private val failedSpinePaths = mutableSetOf<String>()
+    private var renderTree: ViewTreeObserver? = null
+    private var renderObserver: ViewTreeObserver.OnPreDrawListener? = null
+    private var pendingVisual: WebView? = null
+    private var paintedWebView: WebView? = null
+    private var visualRevision = 0L
     private var latestLocator: Locator? = parse(initialLocatorJson)?.takeIf { saved ->
         publication.readingOrder.any { it.href.toString().substringBefore('#') == saved.href.toString().substringBefore('#') }
     }
@@ -140,6 +157,9 @@ class ReaderDocument(
     ): Fragment {
         check(!closed)
         val generation = ++navigatorGeneration
+        _rendered.value = false
+        readyReflowPath = null
+        failedSpinePaths.clear()
         val fragment = when (format) {
             PublicationFormat.EPUB -> EpubNavigatorFactory(publication).createFragmentFactory(
                 initialLocator = latestLocator,
@@ -152,21 +172,47 @@ class ReaderDocument(
                         onError("External links are unavailable in offline reading.")
                     }
                     override fun onResourceLoadFailed(href: Url, error: ReadError) {
+                        failedResource(generation, href)
                         onError("This part of the book could not be displayed. Try another chapter or import a fresh copy.")
                     }
                 },
                 paginationListener = object : EpubNavigatorFragment.PaginationListener {
+                    override fun onPageLoaded() {
+                        // This notification also includes offscreen prefetched resources.
+                        // Fixed-layout pages must prove their current visible WebView painted.
+                        if (!supportsTypography) confirmEpubFrame(generation)
+                    }
                     override fun onPageChanged(pageIndex: Int, totalPages: Int, locator: Locator) {
                         if (generation != navigatorGeneration || ownerReleased) return
+                        readyReflowPath = resourcePath(locator.href.toString())
+                        confirmEpubFrame(generation)
                         nativePageEvents.value = NativePageEvent(generation, ++nativePageRevision, locator)
                     }
                 },
             ).instantiate(classLoader, EpubNavigatorFragment::class.java.name)
-            PublicationFormat.PDF -> PdfNavigatorFactory(publication, PdfiumEngineProvider()).createFragmentFactory(
+            PublicationFormat.PDF -> PdfNavigatorFactory(publication, PdfiumEngineProvider(listener = object : PdfiumEngineProvider.Listener {
+                override fun onConfigurePdfView(configurator: PDFView.Configurator) {
+                    if (generation == navigatorGeneration) _rendered.value = false
+                    var visiblePage = (latestLocator?.locations?.position ?: 1) - 1
+                    // Preserve the adapter's onRender/onPageChange listeners. onDrawAll is
+                    // called for actual cached bitmap parts; onDraw alone can fire on a
+                    // blank current page while only an adjacent page has rendered.
+                    configurator.onPageScroll { page, _ ->
+                        if (page != visiblePage) {
+                            visiblePage = page
+                            if (generation == navigatorGeneration) _rendered.value = false
+                        }
+                    }
+                    configurator.onDrawAll { _, _, _, page ->
+                        if (page == visiblePage && generation == navigatorGeneration && !ownerReleased) _rendered.value = true
+                    }
+                }
+            })).createFragmentFactory(
                 initialLocator = latestLocator,
                 initialPreferences = preferences.pdf(),
                 listener = object : PdfNavigatorFragment.Listener {
                     override fun onResourceLoadFailed(href: Url, error: ReadError) {
+                        if (generation == navigatorGeneration) _rendered.value = false
                         onError("This PDF page could not be displayed. Try another page or import a fresh copy.")
                     }
                 },
@@ -175,6 +221,7 @@ class ReaderDocument(
         (fragment as VisualNavigator).addInputListener(object : InputListener {
             override fun onTap(event: TapEvent): Boolean { onInteraction(); onTap(); return true }
             override fun onDrag(event: DragEvent): Boolean { onInteraction(); return false }
+            override fun onKey(event: KeyEvent): Boolean { onInteraction(); return false }
         })
         return fragment
     }
@@ -186,18 +233,98 @@ class ReaderDocument(
         }
         this.navigator = navigator
         selectionScope = viewScope
+        removeRenderObserver()
+        if (navigator is EpubNavigatorFragment) {
+            val generation = navigatorGeneration
+            val tree = navigator.view?.viewTreeObserver
+            val observer = ViewTreeObserver.OnPreDrawListener { confirmEpubFrame(generation); true }
+            if (tree?.isAlive == true) {
+                tree.addOnPreDrawListener(observer)
+                renderTree = tree
+                renderObserver = observer
+            }
+            confirmEpubFrame(generation)
+        }
     }
     internal fun detach(navigator: Navigator) {
         if (this.navigator === navigator) {
             (navigator as? DecorableNavigator)?.removeDecorationListener(highlightListener)
             this.navigator = null
             selectionScope = null
+            removeRenderObserver()
+            _rendered.value = false
         }
     }
     internal fun accept(locator: Locator) {
         latestLocator = locator
         val progress = locator.locations.totalProgression?.takeIf(Double::isFinite)?.coerceIn(0.0, 1.0) ?: 0.0
         _location.value = ReaderLocation(locator.toJSON().toString(), progress, locator.title, locator.locations.position)
+        if (format == PublicationFormat.EPUB) confirmEpubFrame(navigatorGeneration)
+    }
+
+    private fun resourcePath(value: String): String? = Uri.parse(value).path
+        ?.removePrefix("/")?.removePrefix("./")?.takeIf { it.isNotBlank() }
+
+    private fun failedResource(generation: Long, href: Url) {
+        if (generation != navigatorGeneration) return
+        val path = resourcePath(href.toString()) ?: return
+        if (publication.readingOrder.any { resourcePath(it.url().toString()) == path }) {
+            failedSpinePaths += path
+            if (navigator?.currentLocator?.value?.href?.toString()?.let(::resourcePath) == path) _rendered.value = false
+        }
+    }
+
+    private fun removeRenderObserver() {
+        renderObserver?.let { if (renderTree?.isAlive == true) renderTree?.removeOnPreDrawListener(it) }
+        renderObserver = null
+        renderTree = null
+        pendingVisual = null
+        paintedWebView = null
+        visualRevision++
+    }
+
+    /** Readium still renders every page; this observes only its visible Android WebView. */
+    private fun confirmEpubFrame(generation: Long) {
+        val native = navigator as? EpubNavigatorFragment ?: return
+        if (generation != navigatorGeneration || ownerReleased) return
+        val root = native.view ?: return
+        val path = resourcePath(native.currentLocator.value.href.toString()) ?: return
+        if (path in failedSpinePaths || (supportsTypography && readyReflowPath != path)) {
+            _rendered.value = false
+            return
+        }
+        fun usable(web: WebView): Boolean {
+            val rect = Rect()
+            return web.isShown && web.progress == 100 && resourcePath(web.url.orEmpty()) == path &&
+                web.width > 0 && web.height > 0 && web.getGlobalVisibleRect(rect) &&
+                rect.width().toLong() * rect.height() * 2 >= web.width.toLong() * web.height
+        }
+        fun find(view: View): WebView? {
+            if (view is WebView) return view.takeIf(::usable)
+            if (view is ViewGroup) for (index in 0 until view.childCount) find(view.getChildAt(index))?.let { return it }
+            return null
+        }
+        val web = find(root)
+        if (web == null) {
+            _rendered.value = false
+            pendingVisual = null
+            paintedWebView = null
+            visualRevision++
+            return
+        }
+        if ((_rendered.value && paintedWebView === web) || pendingVisual === web) return
+        pendingVisual = web
+        val revision = ++visualRevision
+        web.postVisualStateCallback(revision, object : WebView.VisualStateCallback() {
+            override fun onComplete(requestId: Long) {
+                if (revision != visualRevision || generation != navigatorGeneration || navigator !== native || ownerReleased) return
+                pendingVisual = null
+                if (path !in failedSpinePaths && resourcePath(native.currentLocator.value.href.toString()) == path && usable(web)) {
+                    paintedWebView = web
+                    _rendered.value = true
+                }
+            }
+        })
     }
     internal fun submitPreferences(navigator: Navigator, preferences: ReaderPreferences) {
         when (navigator) {
