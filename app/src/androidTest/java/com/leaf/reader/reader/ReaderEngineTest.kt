@@ -203,6 +203,7 @@ class ReaderEngineTest {
     private fun launch(name: String, format: PublicationFormat) {
         scenario = ActivityScenario.launch(Intent(context, ReaderHarnessActivity::class.java)
             .putExtra("fixturePath", fixture(name).absolutePath).putExtra("fixtureFormat", format.name))
+        await { it.document?.rendered?.value == true }
     }
     private fun await(timeout: Long = 15_000, condition: (ReaderHarnessActivity) -> Boolean) {
         val deadline = SystemClock.uptimeMillis() + timeout

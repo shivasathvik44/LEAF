@@ -16,6 +16,9 @@ class StatisticsRepository @Inject constructor(private val database: LeafDatabas
         ReadingSession(it.id, it.bookId, it.startedAt, it.endedAt, it.activeDurationMs)
     } }
 
+    /** Explicit book removal also removes its history; an in-flight writer must not recreate it. */
+    internal suspend fun bookExists(bookId: String): Boolean = database.statistics().bookExists(bookId)
+
     /** Persist an observed closed checkpoint; callers may retry safely with the same UUID. */
     suspend fun recordInterval(
         bookId: String,
