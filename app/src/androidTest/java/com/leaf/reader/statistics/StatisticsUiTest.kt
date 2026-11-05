@@ -105,9 +105,10 @@ class StatisticsUiTest {
         assertEquals(120_000L, model.state.value.activity.history.single { it.bookId == first.id }.activeDurationMs)
 
         showMonth(YearMonth.from(firstSlot.day))
-        compose.onNodeWithTag("activity-day-${firstSlot.day}").performScrollTo().performClick().assertIsSelected()
+        compose.onNodeWithTag("activity-day-${firstSlot.day}").performScrollTo().performClick()
         awaitUi { it.selectedDay == firstSlot.day && it.visibleHistory.any { row -> row.bookId == first.id } &&
             it.visibleHistory.none { row -> row.bookId == second.id } }
+        compose.onNodeWithTag("activity-day-${firstSlot.day}").performScrollTo().assertIsSelected()
         showHistory(first, firstSlot.day)
         assertEquals(1, compose.onAllNodesWithTag(historyTag(first, firstSlot.day)).fetchSemanticsNodes().size)
 
