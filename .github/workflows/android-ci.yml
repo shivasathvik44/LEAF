@@ -109,9 +109,7 @@ jobs:
           yes | "$SDKMANAGER" --licenses || true
 
           "$SDKMANAGER" --version
-          "$SDKMANAGER" --install \
-            "platforms;android-37" \
-            "build-tools;37.0.0"
+          echo "Using Android SDK packages provided by setup-android and Gradle provisioning."
 
       - name: Validate Android SDK installation
         run: |
@@ -247,9 +245,7 @@ jobs:
           yes | "$SDKMANAGER" --licenses || true
 
           "$SDKMANAGER" --version
-          "$SDKMANAGER" --install \
-            "platforms;android-37" \
-            "build-tools;37.0.0"
+          echo "Using Android SDK packages provided by setup-android and Gradle provisioning."
 
       - name: Validate Android SDK installation
         run: |
