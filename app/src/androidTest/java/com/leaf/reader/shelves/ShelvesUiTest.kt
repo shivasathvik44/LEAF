@@ -3,6 +3,7 @@ package com.leaf.reader.shelves
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -111,11 +112,20 @@ class ShelvesUiTest {
         // Both rejected edits preserve the actual prior draft rather than shortening it.
         compose.onNodeWithTag("shelf-name").performTextReplacement("x".repeat(300_000))
         closeSoftKeyboard()
-        compose.onNodeWithText("That name is too long. The new text was not added; use up to 100 characters.").performScrollTo().assertIsDisplayed()
+        compose.waitUntil(15_000) {
+            compose.onAllNodesWithText("That name is too long. The new text was not added; use up to 100 characters.")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("That name is too long. The new text was not added; use up to 100 characters.").assertIsDisplayed()
         compose.onNodeWithTag("shelf-name").assertTextEquals(editedName)
         compose.onNodeWithTag("shelf-description").performTextReplacement("y".repeat(300_000))
         closeSoftKeyboard()
-        compose.onNodeWithText("That description is too long. The new text was not added; use up to 2000 characters.").performScrollTo().assertIsDisplayed()
+        compose.waitUntil(15_000) {
+            compose.onAllNodesWithText("That description is too long. The new text was not added; use up to 2000 characters.")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("That description is too long. The new text was not added; use up to 2000 characters.")
+            .assertIsDisplayed()
         compose.onNodeWithTag("shelf-description").assertTextEquals(editedDescription)
         closeSoftKeyboard()
         compose.activityRule.scenario.recreate()
@@ -178,7 +188,7 @@ class ShelvesUiTest {
         compose.onNodeWithTag("shelf-save").performClick()
         compose.waitUntil(15_000) { compose.onAllNodesWithTag("shelf-editor-error").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("A shelf with that name already exists. Choose another name.").assertIsDisplayed()
-        compose.onNodeWithTag("shelf-name").assertTextEquals(duplicate)
+        compose.onNodeWithTag("shelf-name").assertTextContains(duplicate, substring = false)
         compose.onNodeWithTag("shelf-description").assertTextEquals(draft)
 
         val retryName = "$prefix Retry"

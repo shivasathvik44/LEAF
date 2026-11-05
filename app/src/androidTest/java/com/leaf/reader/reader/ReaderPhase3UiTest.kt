@@ -360,7 +360,11 @@ class ReaderPhase3UiTest {
     }
 
     private fun awaitState(condition: (com.leaf.reader.feature.reader.ReaderUiState) -> Boolean) {
-        compose.waitUntil(20_000) { model?.state?.value?.let(condition) == true }
+        compose.waitUntil(20_000) {
+            var satisfied = false
+            instrumentation.runOnMainSync { satisfied = model?.state?.value?.let(condition) == true }
+            satisfied
+        }
     }
 
     private suspend fun dropTrigger() {

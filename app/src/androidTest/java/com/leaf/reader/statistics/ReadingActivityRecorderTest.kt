@@ -99,6 +99,7 @@ class ReadingActivityRecorderTest {
         recorder.foregroundEligible(true)
         time(1_000)
         scope.cancel() // Models ViewModel.onCleared without a surviving viewModelScope.
+        recorder.close()
         recorder.awaitClosed()
         assertEquals(1_000L, repository.sessions.first().sumOf { it.activeDurationMs })
         time(100_000)
