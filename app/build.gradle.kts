@@ -60,6 +60,8 @@ dependencies {
     implementation(libs.readium.streamer)
     implementation(libs.readium.navigator)
     implementation(libs.readium.pdfium)
+    // Already supplied at runtime by Readium. Its public draw callback proves a PDF page rendered.
+    compileOnly(libs.pdf.viewer)
     coreLibraryDesugaring(libs.desugar)
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)

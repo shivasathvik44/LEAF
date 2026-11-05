@@ -25,6 +25,13 @@ The version catalog and wrapper properties are the authority for the selected ve
 | JUnit | 4.13.2 | JVM tests |
 | Espresso core | 3.7.0 | Android tests for the native text-selection menu; test-only |
 
+Phase 4 declares `com.github.marain87:AndroidPdfViewer:3.2.8` as `compileOnly` so
+Leaf can name the existing viewer's public drawing callbacks. Readium already
+provides that same artifact at runtime; this does not add another runtime PDF
+backend or change its version. The callbacks observe the current native bitmap
+page before activity accounting starts, without replacing Readium rendering or
+overriding the adapter's own render/page-change listeners.
+
 Readium 3.4.0 itself builds with Kotlin 2.4.20 and AGP 9.3.1. Its stable Fragment navigator is selected; the separately published experimental navigator APIs are outside this integration. Readium's source Gradle daemon uses JDK 21, while Leaf initially selects JDK 17. Build and lint results must resolve this distinction. See [AGP 9.3 compatibility](https://developer.android.com/build/releases/agp-9-3-0-release-notes) and [Gradle 9.8.2 compatibility](https://docs.gradle.org/9.8.2/userguide/compatibility.html).
 
 ## Readium source audit — 2026-11-01
