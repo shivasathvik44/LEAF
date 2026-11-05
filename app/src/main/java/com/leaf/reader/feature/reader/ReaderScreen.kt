@@ -49,6 +49,8 @@ import androidx.fragment.compose.AndroidFragment
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.leaf.reader.core.util.PublicationFormat
+import com.leaf.reader.core.ui.ReaderInteractionHost
+import com.leaf.reader.core.ui.ReadingActivityEligibilityEffect
 import com.leaf.reader.data.readium.ReaderHostFragment
 import com.leaf.reader.domain.model.ReaderPreferences
 import com.leaf.reader.domain.model.ReaderTheme
@@ -69,12 +71,24 @@ fun ReaderScreen(bookId: String, onBack: () -> Unit) {
     var bookmarkLabel by rememberSaveable { mutableStateOf("") }
     var addingBookmark by rememberSaveable { mutableStateOf(false) }
     val document = state.document
+    ReadingActivityEligibilityEffect(
+        readerUsable = state.contentReady && document != null && !state.loading && state.error == null,
+        modalOpen = panel != null || overflow || addingBookmark || state.selection != null || state.editingHighlight != null,
+        onEligibilityChanged = model::foregroundEligible,
+    )
+    DisposableEffect(activity, model) {
+        val host = activity as? ReaderInteractionHost
+        val listener: () -> Unit = model::interact
+        host?.onReadingInteraction = listener
+        onDispose { host?.let { if (it.onReadingInteraction === listener) it.onReadingInteraction = null } }
+    }
     val fragmentArguments = remember(bookId) { Bundle().apply { putString("bookId", bookId) } }
     fun dismissPanel() { if (panel == "search") model.cancelSearch(); panel = null }
     LaunchedEffect(panel) { if (panel != "search") model.cancelSearch() }
     LaunchedEffect(bookId) { model.initialize(bookId) }
     DisposableEffect(model, activity) { onDispose { if (!activity.isChangingConfigurations) model.closeReader() } }
     LaunchedEffect(state.message) { state.message?.let { snackbar.showSnackbar(it); model.message(null) } }
+    LaunchedEffect(state.activityError) { state.activityError?.let { snackbar.showSnackbar(it, duration = SnackbarDuration.Long) } }
     BackHandler { if (panel != null) dismissPanel() else { model.closeReader(); onBack() } }
     val dark = state.preferences.theme == ReaderTheme.DARK
     val page = when (state.preferences.theme) { ReaderTheme.LIGHT -> Color(0xFFFAFAF6); ReaderTheme.DARK -> Color(0xFF151A16); ReaderTheme.SEPIA -> Color(0xFFFAF3E3) }
@@ -99,7 +113,7 @@ fun ReaderScreen(bookId: String, onBack: () -> Unit) {
             state.error != null -> Column(Modifier.align(Alignment.Center).padding(28.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text(state.error.orEmpty(), color = ink)
                 Button(onClick = model::retry) { Text("Try again") }
-                TextButton(onClick = { model.closeReader(); onBack() }) { Text("Back to library") }
+                TextButton(onClick = { model.closeReader(); onBack() }) { Text("Close reader") }
             }
             document != null -> key(document) {
                 AndroidFragment<ReaderHostFragment>(
@@ -107,6 +121,7 @@ fun ReaderScreen(bookId: String, onBack: () -> Unit) {
                     arguments = fragmentArguments,
                 ) { host ->
                     host.onTap = model::toggleControls
+                    host.onInteraction = model::interact
                     host.onError = model::message
                     host.bind(document, state.preferences)
                 }
@@ -115,7 +130,7 @@ fun ReaderScreen(bookId: String, onBack: () -> Unit) {
         if (state.controlsVisible) {
             Surface(color = page.copy(alpha = 0.97f), contentColor = ink, modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter)) {
                 Row(Modifier.statusBarsPadding().heightIn(min = 64.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { model.closeReader(); onBack() }) { Icon(Icons.AutoMirrored.Default.ArrowBack, "Back to library") }
+                    IconButton(onClick = { model.closeReader(); onBack() }) { Icon(Icons.AutoMirrored.Default.ArrowBack, "Close reader") }
                     Column(Modifier.weight(1f)) {
                         Text(state.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
                         state.location?.title?.let { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall) }

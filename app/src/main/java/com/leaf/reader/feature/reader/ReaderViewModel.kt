@@ -12,6 +12,8 @@ import com.leaf.reader.data.repository.AnnotationRepository
 import com.leaf.reader.data.repository.BookRepository
 import com.leaf.reader.data.repository.PreferencesRepository
 import com.leaf.reader.data.repository.ReadingRepository
+import com.leaf.reader.data.repository.ReadingActivityRecorder
+import com.leaf.reader.data.repository.ReadingActivityRecorderFactory
 import com.leaf.reader.domain.model.ReaderPreferences
 import com.leaf.reader.domain.model.AnnotationLimits
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -37,6 +39,7 @@ class ReaderViewModel @Inject constructor(
     private val reading: ReadingRepository,
     private val preferences: PreferencesRepository,
     private val annotations: AnnotationRepository,
+    private val activityRecorders: ReadingActivityRecorderFactory,
 ) : ViewModel() {
     private val _state = MutableStateFlow(ReaderUiState())
     val state: StateFlow<ReaderUiState> = _state.asStateFlow()
@@ -50,6 +53,9 @@ class ReaderViewModel @Inject constructor(
     private var latestPosition: Pair<String, ReaderLocation>? = null
     private var searchJob: Job? = null
     @Volatile private var searchGeneration = 0L
+    private var activityRecorder: ReadingActivityRecorder? = null
+    private var hasReadInForeground = false
+    private var markedOpened = false
 
     fun initialize(id: String) {
         if (bookId == id && (opening?.isActive == true || _state.value.document != null)) return
@@ -64,7 +70,7 @@ class ReaderViewModel @Inject constructor(
                 val publication = publications.open(File(book.storagePath))
                 opened = ReaderDocument(publication, book.format, latestPosition?.takeIf { it.first == id }?.second?.locatorJson ?: saved?.locatorJson)
                 val document = opened
-                books.markOpened(id)
+                activityRecorder = activityRecorders.create(id, viewModelScope)
                 if (writer == null || writerBookId != id) {
                     writer?.close()
                     writerBookId = id
@@ -77,7 +83,20 @@ class ReaderViewModel @Inject constructor(
                 observe { document.selection.collect { value -> if (_state.value.document === document) _state.update { it.copy(selection = value, annotationError = null) } } }
                 observe { document.activatedHighlight.collect { value -> if (_state.value.document === document) _state.update { it.copy(editingHighlight = value, annotationError = null) } } }
                 observe { document.location.collect { location ->
-                    if (location != null) { _state.update { it.copy(location = location) }; writer?.offer(location) }
+                    if (location != null) {
+                        _state.update { it.copy(location = location) }
+                        if (hasReadInForeground && document.rendered.value) writer?.offer(location)
+                    }
+                } }
+                observe { document.rendered.collect { ready ->
+                    if (_state.value.document === document) {
+                        if (!ready) activityRecorder?.foregroundEligible(false)
+                        _state.update { it.copy(contentReady = ready) }
+                    }
+                } }
+                val recorder = activityRecorder
+                if (recorder != null) observe { recorder.error.collect { error ->
+                    _state.update { if (it.document === document) it.copy(activityError = error) else it }
                 } }
                 opened = null // Ownership is now held by state until closeReader/onCleared.
             } catch (cancelled: CancellationException) { throw cancelled }
@@ -87,6 +106,30 @@ class ReaderViewModel @Inject constructor(
         }
     }
     fun retry() { val id = bookId ?: return; closeReader(); initialize(id) }
+    fun foregroundEligible(value: Boolean) {
+        val document = _state.value.document
+        val eligible = value && document?.rendered?.value == true && _state.value.error == null
+        activityRecorder?.foregroundEligible(eligible)
+        if (eligible) {
+            hasReadInForeground = true
+            document?.currentLocation()?.let { writer?.offer(it) }
+            if (!markedOpened) {
+                val id = bookId ?: return
+                markedOpened = true
+                viewModelScope.launch {
+                    try { books.markOpened(id) }
+                    catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) {
+                        if (_state.value.document === document) {
+                            markedOpened = false
+                            message("This book’s reading status could not be saved. Please try again.")
+                        }
+                    }
+                }
+            }
+        }
+    }
+    fun interact() { activityRecorder?.interact() }
     fun toggleControls() { _state.update { it.copy(controlsVisible = !it.controlsVisible) } }
     fun showControls() { _state.update { it.copy(controlsVisible = true) } }
     fun message(value: String?) { _state.update { it.copy(message = value) } }
@@ -234,13 +277,14 @@ class ReaderViewModel @Inject constructor(
         val document = _state.value.document ?: return
         navigate(document, "That chapter could not be opened.") { goChapter(id) }
     }
-    fun previous() { seeking?.cancel(); _state.value.document?.goBackward() }
-    fun next() { seeking?.cancel(); _state.value.document?.goForward() }
+    fun previous() { interact(); seeking?.cancel(); _state.value.document?.goBackward() }
+    fun next() { interact(); seeking?.cancel(); _state.value.document?.goForward() }
     fun goProgression(value: Double) {
         val document = _state.value.document ?: return
         navigate(document, "That reading position is unavailable.") { goProgression(value) }
     }
     private fun navigate(document: ReaderDocument, unavailable: String, action: suspend ReaderDocument.() -> Boolean) {
+        interact()
         seeking?.cancel()
         seeking = viewModelScope.launch {
             try { if (!document.action() && _state.value.document === document) message(unavailable) }
@@ -258,11 +302,14 @@ class ReaderViewModel @Inject constructor(
     } }
 
     fun closeReader() {
+        activityRecorder?.pause()
+        activityRecorder?.close()
+        activityRecorder = null
         seeking?.cancel(); seeking = null
         highlightsJob?.cancel(); highlightsJob = null
         val location = _state.value.document?.currentLocation() ?: _state.value.location
         val currentBook = bookId
-        if (location != null && currentBook != null) {
+        if (hasReadInForeground && location != null && currentBook != null) {
             latestPosition = currentBook to location
             writer?.offer(location)
         }
@@ -273,6 +320,8 @@ class ReaderViewModel @Inject constructor(
         // otherwise be overwritten by an older screen's still-draining writer.
         _state.value.document?.releaseOwner()
         _state.value = ReaderUiState(loading = false)
+        hasReadInForeground = false
+        markedOpened = false
     }
     override fun onCleared() {
         closeReader()

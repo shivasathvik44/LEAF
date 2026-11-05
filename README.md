@@ -10,8 +10,9 @@ Library/import, the reader and Phase 3 annotations/search have passed local chec
 on API 35: 57 JVM tests, 61 Android tests, debug assembly and zero lint errors.
 Phase 3 includes reflowable-EPUB text selection, colored highlights, notes and
 contextual EPUB search. Fixed-layout EPUB text selection and PDF highlighting/search
-are unsupported. Shelves, reading activity and release hardening remain later
-milestones; OS process death and the wider device matrix still need verification.
+are unsupported. Phase 4 adds custom shelves and foreground reading activity;
+its full verification gate is in progress. Release hardening, OS process death and
+the wider device matrix still need verification.
 
 ## Build
 

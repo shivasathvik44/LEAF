@@ -15,6 +15,8 @@ data class ReaderUiState(
     val title: String = "Reader",
     val format: PublicationFormat = PublicationFormat.EPUB,
     val document: ReaderDocument? = null,
+    val contentReady: Boolean = false,
+    val activityError: String? = null,
     val location: ReaderLocation? = null,
     val chapters: List<ReaderChapter> = emptyList(),
     val bookmarks: List<Bookmark> = emptyList(),

@@ -32,6 +32,17 @@ alone does not verify rendering, annotation restoration, or daily usability.
 - [ ] Phase 5: reliability, migrations, accessibility, security/license review,
   documentation, tests, CI and installable release artifact verified.
 
+### Phase 4 implementation — in progress, 2026-11-05
+
+- Preserve the existing Room schema and all prior import, reader and annotation behavior.
+- Connect custom shelves, descriptions, membership management and book-details selection.
+- Count observed foreground reading only after native content renders; pause for
+  background, window-focus loss, device lock, modal screens and idle readers.
+- Persist closed checkpoints with stable retry IDs; display daily activity,
+  calendar, reading history, started/completed books and streaks.
+- Verify core accounting, database safety, real screens and native reader lifecycle
+  integration before marking this milestone complete.
+
 ## Release constraints
 
 No signing credentials were supplied. A signed release cannot be produced using
