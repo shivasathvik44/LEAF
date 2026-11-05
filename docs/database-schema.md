@@ -38,6 +38,18 @@ actual SQLite insert/update failures to exercise preservation and rollback.
 
 Reading sessions are closed, observed checkpoints rather than persisted running timers. Active duration must be positive and no larger than its wall interval. The reader must submit only unlocked foreground activity and normalize active intervals for statistics; background/process-death time is never inferred from an open database timestamp.
 
+Phase 4 also uses schema version 1 unchanged. Shelf creation with an optional first
+membership is transactional, duplicate membership insertion is idempotent, and
+failed edits preserve the existing shelf. Shelf metadata limits are validated
+before writes: 100 Unicode code points for names and 2,000 for descriptions.
+The existing `NOCASE` name uniqueness remains ASCII-only.
+
+The recorder submits exact closed active endpoints and retries immutable UUIDs.
+Its bounded uncommitted backlog lives only in memory, not in a new timer table;
+the database never contains an open-session timestamp to resume after process
+death. Raw checkpoint rows are retained rather than compacted. Book deletion
+cascades to those rows, while shelf deletion does not affect reading activity.
+
 ## Migration policy
 
 `LeafDatabase.ALL_MIGRATIONS` is explicitly empty for initial version 1. The builder uses it without any destructive fallback. Every future version change must add an explicit data-preserving `Migration`, retain the older exported schemas, and test representative existing books, locators, annotations, shelves, and history. Never use `fallbackToDestructiveMigration`, destructive downgrade, or drop/recreate to make an upgrade pass.

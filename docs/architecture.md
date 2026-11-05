@@ -24,7 +24,7 @@ Screens must not query DAOs or manipulate files. Navigation carries book IDs, ne
 | ReadingRepository | Save and restore full locator JSON and reading progress |
 | AnnotationRepository | Bookmarks, EPUB highlights, and personal notes |
 | ShelfRepository | Shelf metadata and many-to-many membership |
-| StatisticsRepository | Persist active sessions and aggregate reading activity |
+| StatisticsRepository | Persist immutable closed active checkpoints with idempotent retry |
 | PreferencesRepository | Persist global preferences and supported per-book overrides |
 
 Hilt constructs database, repositories, use cases, and ViewModels. Coroutines perform file/database work off the main thread; Flow propagates changes to the UI. WorkManager is appropriate only for durable, deferrable maintenance that requires it, not for an always-running reader service.
@@ -90,9 +90,69 @@ locators. The feature specification records all input and result limits. Search
 navigation uses the real result locator and a temporary navigator decoration
 where supported.
 
+## Shelves
+
+`ShelfRepository` owns shelf metadata and many-to-many membership. Creating a shelf
+from a book's picker commits the shelf and its first membership together. Deleting
+a shelf cascades only to membership rows, preserving books, files, annotations,
+progress and activity. Names use the existing SQLite `NOCASE` uniqueness rule;
+duplicate names surface a recoverable editor error. Names and descriptions are
+limited to 100 and 2,000 Unicode code points respectively. Oversized UI edits are
+rejected as a whole before they enter `SavedStateHandle`; the prior valid draft
+remains visible and configuration restoration cannot serialize a huge clipboard
+payload. Failed writes retain the draft for retry.
+
+The shelf and Activity screens observe repositories through activity-owned Hilt
+ViewModels. They stop their database subscriptions shortly after leaving the
+screen, rather than reloading the complete library/history on every reader event.
+Navigation still carries only book IDs.
+
 ## Session accounting
 
-Only foreground, unlocked, active reader time contributes to a session. Use monotonic elapsed time for duration and wall-clock time for dates. Pause accounting when the activity loses active reader state, the screen locks, or inactivity is detected. Persist bounded checkpoints so process death cannot add unattended elapsed time. Daily aggregation must handle sessions that cross midnight, timezone changes, and interrupted sessions without double counting.
+`ReadingActivityRecorder` accepts time only while the reader has usable rendered
+content, is resumed with window focus, is on an interactive unlocked device, and
+has no contents/search/appearance/bookmark/note modal covering reading. Lifecycle,
+focus, device state and disposal transitions pause recording. Real touch, scroll,
+navigation and keyboard input renew the two-minute idle deadline; automatic
+locator updates and timers do not count as interaction.
+
+Readiness belongs to the reader integration. Reflowable EPUBs require Readium's
+current loaded-page notification and a visible matching WebView frame; fixed-layout
+EPUBs also prove a matching loaded visible WebView through its visual-state
+callback. An offscreen prefetch or failed main resource cannot establish readiness.
+PDF readiness observes actual bitmap-part drawing for the current page through
+the existing viewer's public `onDrawAll`/`onPageScroll` callbacks, preserving the
+adapter's own render/page-change listeners. Reading status and initial progress
+writes are gated by actual foreground rendered reading.
+
+The accounting core uses monotonic time for durations and paired wall-clock
+observations for dates. Five-second heartbeats persist closed intervals; missed
+observation gaps over fifteen seconds and wall-clock jumps are discarded
+conservatively. Idle intervals keep their actual boundary, including across local
+midnight. No running timestamp is persisted or reconstructed after process death.
+
+Once a checkpoint is offered to Room, its UUID and interval remain immutable for
+retry. Final writes drain in an independent bounded scope after a reader ViewModel
+is cancelled. A shared capacity of 128 pending checkpoints covers open readers and
+retained closed failures; storage pressure pauses further accrual. Failed closed
+checkpoints remain in memory and retry on the next reader opening, with an
+application-level warning until recovery or acknowledgement. Explicit book removal
+can discard only that removed book's orphan pending history.
+
+This is not an absolute durability guarantee: abrupt process death can lose the
+uncommitted heartbeat tail plus write latency, and failed in-memory writes can be
+lost if the process ends. Neither case invents unattended time. Healthy storage,
+failure recovery and system lifecycle behavior remain subject to the milestone's
+recorded verification gate.
+
+`ActivityProjection` derives totals, daily time, history, calendar and streaks off
+the UI thread. It splits intervals at local midnight with timezone/DST rules,
+clips future time and counts overlapping/replayed instants once across books.
+History is coalesced by book and local day. Started books come from observed
+intervals or reading/completed status, not an attempted opening timestamp alone;
+completed counts reflect current book status. Month/day selection is saved.
+Raw checkpoint rows are not yet compacted. Long-term database growth and large
+history performance remain a release scaling check.
 
 ## Data safety
 

@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — shelves and reading activity (verification pending)
+
+- Added custom shelves with descriptions, cover collages, book counts, editing,
+  membership management and a book-details shelf picker. Shelf deletion keeps books.
+- Added observed reading checkpoints and an Activity screen with daily time,
+  calendar/history, started/completed books and streaks. Background, locked, idle,
+  unfocused and modal-covered reader intervals do not earn time.
+- Start activity only after the visible native EPUB/PDF page renders, rather than
+  treating a parsed publication or default locator as proof of usable content.
+- Keep failed checkpoint UUIDs for retry in a bounded in-memory backlog; pause
+  accrual under storage pressure and surface save failures after reader closure.
+- Added accounting, projection, shelf transaction and real-screen/lifecycle tests.
+  The complete Phase 4 build, lint and device gate remains pending. Room stays at
+  schema 1; no destructive migration or new runtime PDF dependency is introduced.
+
 ## Unreleased — annotations and search, verified locally 2026-11-04
 
 - Added native reflowable-EPUB selection, four highlight colors, visible Readium

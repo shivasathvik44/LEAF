@@ -60,12 +60,36 @@ a more specific phrase; partial search results are identified as incomplete.
 
 ## Shelves and activity
 
-Shelves support names, descriptions, counts and many-to-many book membership.
-Deleting a shelf removes memberships but keeps books. Reading activity records
-only actively observed foreground time on an unlocked screen. Idle, background,
-locked and unobserved process-death intervals do not count. Checkpoints prevent
-inflation; daily aggregation splits at local midnight. Activity includes totals,
-books started/completed, daily minutes, history, calendar and streaks.
+Shelves support creation, name/description editing, cover collages, counts and
+many-to-many book membership. Books can be added or removed from a shelf screen
+or selected into several shelves from book details. Creating a shelf from that
+picker includes its first book in the same transaction. Deleting a shelf removes
+memberships and preserves its books and their files, progress, annotations and
+reading activity. Names are unique under SQLite's ASCII `NOCASE` rule. Names allow
+100 Unicode code points and descriptions 2,000; oversized edits are explicitly
+rejected while retaining the prior valid draft. Loading, empty, retryable errors
+and configuration-restored editor text are required.
+
+Reading activity records only observed time after native content renders in a
+resumed, focused, foreground reader on an interactive unlocked device. Covered
+modals, background, lock and idle periods do not earn time. Real input renews a
+two-minute idle deadline. Five-second closed checkpoints use monotonic duration
+and real calendar endpoints; gaps over fifteen seconds and uncertain clock-jump
+windows are discarded conservatively. No running timer is restored from storage.
+
+Checkpoint retries preserve their UUID and interval. Pending memory is bounded
+across readers, further accrual pauses under storage pressure, and failed closed
+writes show a warning and retry when a reader is next opened. Abrupt process death
+may lose uncommitted or failed in-memory time; it cannot add unattended time.
+
+Activity includes total time, started/completed books, daily minutes, history,
+month calendar and current/longest streaks. Started books require observed time or
+reading/completed status; a failed opening timestamp alone is insufficient.
+Completed counts reflect current status. Local-midnight/DST splitting, future-time
+clipping and overlap/replay deduplication keep totals and book/day history coherent.
+Calendar selection survives configuration restoration. Deleting a book removes
+its activity through the existing confirmed book-removal flow. Raw checkpoint
+compaction and large-history performance remain release checks.
 
 ## Settings and privacy
 
