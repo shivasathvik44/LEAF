@@ -43,7 +43,7 @@ import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -105,7 +105,7 @@ class ReaderActivityUiTest {
     @Test fun epubActivityStopsForAppearanceBackgroundAndLockedScreenThenResumes() = runBlocking<Unit> {
         openFixture(PublicationFormat.EPUB)
         awaitEpubText()
-        val first = awaitHeartbeat()
+        val first = awaitHeartbeat("Opening the EPUB")
         assertTrue("Actual rendered foreground reading must produce a heartbeat", first.sumOf { it.activeDurationMs } > 0L)
 
         // The actual appearance sheet covers the reader and must stop accounting.
@@ -125,12 +125,11 @@ class ReaderActivityUiTest {
         val backgroundAt = System.currentTimeMillis()
         SystemClock.sleep(QUIET_PERIOD_MS)
         assertStopsAt("Background", backgroundAt)
+        val foregroundRequestedAt = System.currentTimeMillis()
         compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
         compose.waitForIdle()
         compose.onNodeWithTag("reader-screen").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Next page").performClick()
-        compose.waitForIdle()
-        SystemClock.sleep(1_000L)
+        awaitHeartbeat("Returning from the background", after = foregroundRequestedAt + 4_000L)
 
         // This is the real emulator screen-off path, not a manually forced eligibility flag.
         try {
@@ -146,9 +145,7 @@ class ReaderActivityUiTest {
             compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
             compose.waitForIdle()
             compose.onNodeWithTag("reader-screen").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Next page").performClick()
-            compose.waitForIdle()
-            val resumed = awaitHeartbeat(after = wakeRequestedAt + 4_000L)
+            val resumed = awaitHeartbeat("Waking and unlocking the screen", after = wakeRequestedAt + 4_000L)
             val newlyObserved = resumed.filter { it.endedAt > screenOffAt + BOUNDARY_MARGIN_MS }
             assertTrue("Foreground reading must resume after the actual wake/unlock", newlyObserved.isNotEmpty())
             assertTrue("No checkpoint may bridge the unobserved locked interval",
@@ -164,7 +161,7 @@ class ReaderActivityUiTest {
         assertEquals(PublicationFormat.PDF, requireNotNull(model).state.value.format)
         assertTrue("The PDF must be ready only after native rendering", requireNotNull(model).state.value.contentReady)
         assertTrue("The actual PDF navigator must exist", nativePdfIsShown())
-        assertTrue(awaitHeartbeat().sumOf { it.activeDurationMs } > 0L)
+        assertTrue(awaitHeartbeat("Opening the PDF").sumOf { it.activeDurationMs } > 0L)
 
         compose.onNodeWithContentDescription("Close reader").performClick()
         compose.onNodeWithText("Search your library").assertIsDisplayed()
@@ -202,10 +199,22 @@ class ReaderActivityUiTest {
         assertTrue(requireNotNull(model).state.value.contentReady)
     }
 
-    private suspend fun awaitHeartbeat(after: Long = 0L): List<ReadingSession> = withTimeout(12_000L) {
-        repositories.statistics().sessions.first { rows ->
-            rows.any { it.bookId == id && it.activeDurationMs > 0L && it.endedAt >= after }
-        }.filter { it.bookId == id }.sortedBy(ReadingSession::id)
+    private suspend fun awaitHeartbeat(stage: String, after: Long = 0L): List<ReadingSession> {
+        val rows = withTimeoutOrNull(15_000L) {
+            repositories.statistics().sessions.first { sessions ->
+                sessions.any { it.bookId == id && it.activeDurationMs > 0L && it.endedAt >= after }
+            }
+        }
+        if (rows == null) {
+            var focused = false
+            compose.activityRule.scenario.onActivity { focused = it.hasWindowFocus() }
+            val ready = model?.state?.value?.contentReady
+            val recorderError = model?.state?.value?.activityError
+            throw AssertionError("$stage must produce a foreground reading checkpoint " +
+                "(contentReady=$ready, windowFocused=$focused, interactive=${power.isInteractive}, " +
+                "keyguardLocked=${keyguard.isKeyguardLocked}, recorderError=$recorderError)")
+        }
+        return rows.filter { it.bookId == id }.sortedBy(ReadingSession::id)
     }
 
     private suspend fun ownSessions(): List<ReadingSession> = repositories.statistics().sessions.first()
@@ -231,7 +240,8 @@ class ReaderActivityUiTest {
             compose.activityRule.scenario.onActivity { activity ->
                 val web = visibleWebView(activity.window.decorView)
                 if (web == null) latch.countDown() else web.evaluateJavascript(
-                    "Boolean(document.querySelector('#passage')?.innerText.toLowerCase().includes('silver fern'))") {
+                    "(() => { const passage = document.querySelector('#passage'); " +
+                        "return Boolean(passage && passage.innerText.toLowerCase().includes('silver fern')); })()") {
                     displayed = it == "true"
                     latch.countDown()
                 }

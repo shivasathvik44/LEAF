@@ -9,6 +9,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.leaf.reader.core.util.PublicationFormat
 import com.leaf.reader.data.local.database.LeafDatabase
+import com.leaf.reader.data.local.database.entity.ShelfEntity
 import com.leaf.reader.data.repository.AnnotationRepository
 import com.leaf.reader.data.repository.BookRepository
 import com.leaf.reader.data.repository.ReadingRepository
@@ -138,7 +139,10 @@ class LeafDatabaseTest {
         assertEquals(listOf(1, 1), shelves.shelves.first().map { it.count })
         shelves.update(second, "Journeys", "A revised description")
         assertEquals("A revised description", shelves.shelves.first().first { it.id == second }.description)
-        expectFailure<SQLiteConstraintException> { shelves.create("favourites") }
+        // Exercise the schema's NOCASE index directly, bypassing the repository's duplicate check.
+        expectFailure<SQLiteConstraintException> {
+            database.shelves().insert(ShelfEntity(id(), "favourites", "Duplicate", 1L))
+        }
         shelves.removeBook(first, book.id)
         assertEquals(0, shelves.shelves.first().first { it.id == first }.count)
         shelves.delete(second)

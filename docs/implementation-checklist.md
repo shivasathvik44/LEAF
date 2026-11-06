@@ -28,11 +28,11 @@ alone does not verify rendering, annotation restoration, or daily usability.
 - [x] Phase 3 local gate: bookmarks, rendered reflowable-EPUB highlights, note
   editing, EPUB search, saved-passage navigation, database/fresh-navigator reopen
   and configuration recreation verified. OS process-death remains a release check.
-- [ ] Phase 4: shelves and active foreground reading statistics verified.
+- [x] Phase 4: shelves and active foreground reading statistics verified locally.
 - [ ] Phase 5: reliability, migrations, accessibility, security/license review,
   documentation, tests, CI and installable release artifact verified.
 
-### Phase 4 implementation — in progress, 2026-11-05
+### Phase 4 implementation — verified locally, 2026-11-06
 
 - Preserve the existing Room schema and all prior import, reader and annotation behavior.
 - Connect custom shelves, descriptions, membership management and book-details selection.
@@ -40,8 +40,8 @@ alone does not verify rendering, annotation restoration, or daily usability.
   background, window-focus loss, device lock, modal screens and idle readers.
 - Persist closed checkpoints with stable retry IDs; display daily activity,
   calendar, reading history, started/completed books and streaks.
-- Verify core accounting, database safety, real screens and native reader lifecycle
-  integration before marking this milestone complete.
+- Verified core accounting, database safety, real screens and native reader lifecycle
+  integration. The [testing notes](testing.md) record the local matrix and CI status.
 
 ## Release constraints
 

@@ -6,13 +6,11 @@ Leaf is a native, offline-first Android ebook reader for a personal EPUB and PDF
 
 Leaf is being implemented from an empty repository. It is **not a completed v1.0 release**. Feature availability and verification must be checked against [the implementation checklist](docs/implementation-checklist.md) and [testing notes](docs/testing.md). A successful compilation alone does not establish that importing, rendering, annotations, or position restoration work on a device.
 
-Library/import, the reader and Phase 3 annotations/search have passed local checks
-on API 35: 57 JVM tests, 61 Android tests, debug assembly and zero lint errors.
-Phase 3 includes reflowable-EPUB text selection, colored highlights, notes and
-contextual EPUB search. Fixed-layout EPUB text selection and PDF highlighting/search
-are unsupported. Phase 4 adds custom shelves and foreground reading activity;
-its full verification gate is in progress. Release hardening, OS process death and
-the wider device matrix still need verification.
+Library and import, the reader, EPUB annotations and search, custom shelves,
+and foreground reading activity have passed local checks on API 24 and API 35.
+The reader supports reflowable EPUB text selection, colored highlights, notes,
+and contextual EPUB search. Fixed-layout EPUB text selection and PDF highlighting/search
+are unsupported. OS process death and the wider device matrix are release checks.
 
 ## Build
 

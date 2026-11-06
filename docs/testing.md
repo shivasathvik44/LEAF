@@ -144,6 +144,20 @@ excluded. File-backed database reopening, fresh native navigator creation and
 OS process death. API 24/37, 16 KB devices, full accessibility, immersive system
 bars, complete appearance QA, remote CI and release signing remain separate gates.
 
+### Shelves, reading activity and CI — 2026-11-06
+
+Debug APK assembly, 80 JVM tests and all 82 instrumentation tests passed with
+zero failures or skips. Instrumentation ran separately on API 24 and API 35
+Google APIs x86_64 images using emulator 36.1.9 with host graphics. Android lint
+reported zero errors and 17 warnings. The device cases cover real EPUB and PDF
+imports, native reader and annotation restoration, search locator persistence,
+shelf editing and membership, and reading activity through screen-off and wake.
+
+SDK Manager 22.0 installed the workflow's three packages in an isolated SDK,
+and `actionlint` passed. GitHub Actions verification is pending for the local
+fixes. Local logs are retained in the ignored `.leaf-tools/verification/`
+directory as `ci-api24-full-lifecycle-fix.log` and `ci-api35-full-lifecycle-fix.log`.
+
 ## Commands
 
 Run from the repository root with JDK 17 and the configured Android SDK installed:

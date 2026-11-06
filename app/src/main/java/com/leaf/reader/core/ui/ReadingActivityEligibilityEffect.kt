@@ -13,16 +13,15 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 /** UI lifecycle/window eligibility only; the recorder independently checks device lock/power. */
 @Composable
 fun ReadingActivityEligibilityEffect(
-    readerUsable: Boolean,
     modalOpen: Boolean,
     onEligibilityChanged: (Boolean) -> Unit,
 ) {
     val owner = LocalLifecycleOwner.current
     val view = LocalView.current
     val notify by rememberUpdatedState(onEligibilityChanged)
-    DisposableEffect(owner, view, readerUsable, modalOpen) {
+    DisposableEffect(owner, view, modalOpen) {
         val update = {
-            notify(readerUsable && !modalOpen &&
+            notify(!modalOpen &&
                 owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && view.hasWindowFocus())
         }
         val lifecycleObserver = LifecycleEventObserver { _, _ -> update() }

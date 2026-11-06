@@ -1,10 +1,12 @@
 package com.leaf.reader.shelves
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsOn
-import androidx.compose.ui.test.assertTextContains
-import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -112,25 +114,16 @@ class ShelvesUiTest {
         // Both rejected edits preserve the actual prior draft rather than shortening it.
         compose.onNodeWithTag("shelf-name").performTextReplacement("x".repeat(300_000))
         closeSoftKeyboard()
-        compose.waitUntil(15_000) {
-            compose.onAllNodesWithText("That name is too long. The new text was not added; use up to 100 characters.")
-                .fetchSemanticsNodes().isNotEmpty()
-        }
-        compose.onNodeWithText("That name is too long. The new text was not added; use up to 100 characters.").assertIsDisplayed()
-        compose.onNodeWithTag("shelf-name").assertTextEquals(editedName)
+        awaitEditorError("That name is too long. The new text was not added; use up to 100 characters.")
+        assertEditorText("shelf-name", editedName)
         compose.onNodeWithTag("shelf-description").performTextReplacement("y".repeat(300_000))
         closeSoftKeyboard()
-        compose.waitUntil(15_000) {
-            compose.onAllNodesWithText("That description is too long. The new text was not added; use up to 2000 characters.")
-                .fetchSemanticsNodes().isNotEmpty()
-        }
-        compose.onNodeWithText("That description is too long. The new text was not added; use up to 2000 characters.")
-            .assertIsDisplayed()
-        compose.onNodeWithTag("shelf-description").assertTextEquals(editedDescription)
+        awaitEditorError("That description is too long. The new text was not added; use up to 2000 characters.")
+        assertEditorText("shelf-description", editedDescription)
         closeSoftKeyboard()
         compose.activityRule.scenario.recreate()
-        compose.onNodeWithTag("shelf-name").assertTextEquals(editedName)
-        compose.onNodeWithTag("shelf-description").assertTextEquals(editedDescription)
+        assertEditorText("shelf-name", editedName)
+        assertEditorText("shelf-description", editedDescription)
         compose.onNodeWithTag("shelf-save").performClick()
         val edited = awaitShelf { it.id == second.id && it.name == editedName && it.description == editedDescription }
         assertEquals(second.createdAt, edited.createdAt)
@@ -186,10 +179,9 @@ class ShelvesUiTest {
         compose.onNodeWithTag("shelf-description").performTextReplacement(draft)
         closeSoftKeyboard()
         compose.onNodeWithTag("shelf-save").performClick()
-        compose.waitUntil(15_000) { compose.onAllNodesWithTag("shelf-editor-error").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("A shelf with that name already exists. Choose another name.").assertIsDisplayed()
-        compose.onNodeWithTag("shelf-name").assertTextContains(duplicate, substring = false)
-        compose.onNodeWithTag("shelf-description").assertTextEquals(draft)
+        awaitEditorError("A shelf with that name already exists. Choose another name.")
+        assertEditorText("shelf-name", duplicate)
+        assertEditorText("shelf-description", draft)
 
         val retryName = "$prefix Retry"
         compose.onNodeWithTag("shelf-name").performTextReplacement(retryName)
@@ -203,10 +195,9 @@ class ShelvesUiTest {
             """.trimIndent())
         }
         compose.onNodeWithTag("shelf-save").performClick()
-        compose.waitUntil(15_000) { compose.onAllNodesWithText("This shelf could not be saved. Your entered text has been kept. Please retry.").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("This shelf could not be saved. Your entered text has been kept. Please retry.").assertIsDisplayed()
-        compose.onNodeWithTag("shelf-name").assertTextEquals(retryName)
-        compose.onNodeWithTag("shelf-description").assertTextEquals(draft)
+        awaitEditorError("This shelf could not be saved. Your entered text has been kept. Please retry.")
+        assertEditorText("shelf-name", retryName)
+        assertEditorText("shelf-description", draft)
         compose.onNodeWithTag("shelf-save").assertIsEnabled()
         assertFalse(shelves.shelves.first().any { it.name == retryName })
         assertEquals("Keep this shelf", shelves.shelves.first().single { it.id == existing.id }.description)
@@ -215,6 +206,17 @@ class ShelvesUiTest {
         val saved = awaitShelf { it.name == retryName }
         assertEquals(draft, saved.description)
         assertEquals(1, shelves.shelves.first().count { it.name == retryName })
+    }
+
+    private fun awaitEditorError(message: String) {
+        compose.waitUntil(15_000) { compose.onAllNodesWithText(message).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(message).performScrollTo().assertIsDisplayed()
+    }
+
+    private fun assertEditorText(tag: String, expected: String) {
+        compose.onNodeWithTag(tag).assert(SemanticsMatcher("Editable text equals '$expected'") { node ->
+            node.config.getOrNull(SemanticsProperties.EditableText)?.text == expected
+        })
     }
 
     private suspend fun createShelf(name: String, description: String): Shelf {

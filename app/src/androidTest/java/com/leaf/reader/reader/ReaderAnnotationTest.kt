@@ -310,7 +310,7 @@ class ReaderAnnotationTest {
     }
     private fun visibleColor(rgb: String): String =
         "Array.from(document.querySelectorAll('[class*=\"r2-highlight-\"]')).some(e=>{" +
-            "const v=window.visualViewport,l=v?.offsetLeft??0,t=v?.offsetTop??0,w=v?.width??innerWidth,h=v?.height??innerHeight,s=getComputedStyle(e);" +
+            "const v=window.visualViewport,l=v?v.offsetLeft:0,t=v?v.offsetTop:0,w=v?v.width:innerWidth,h=v?v.height:innerHeight,s=getComputedStyle(e);" +
             "return s.visibility!=='hidden'&&Number(s.opacity)>0&&s.backgroundColor.replace(/\\s/g,'').includes('$rgb')&&" +
             "Array.from(e.getClientRects()).some(r=>r.width>0&&r.height>0&&r.right>l&&r.left<l+w&&r.bottom>t&&r.top<t+h);})"
 
@@ -330,9 +330,9 @@ class ReaderAnnotationTest {
                 const node=document.querySelector('#passage').firstChild;
                 const range=document.createRange();range.setStart(node,2);range.setEnd(node,8);
                 const rect=range.getBoundingClientRect(), viewport=window.visualViewport;
-                return {x:rect.x+rect.width/2,y:rect.y+rect.height/2,
-                    width:viewport?.width??window.innerWidth,
-                    left:viewport?.offsetLeft??0,top:viewport?.offsetTop??0};
+                return {x:rect.left+rect.width/2,y:rect.top+rect.height/2,
+                    width:viewport?viewport.width:window.innerWidth,
+                    left:viewport?viewport.offsetLeft:0,top:viewport?viewport.offsetTop:0};
             })()
         """.trimIndent()))
         var x = 0f; var y = 0f

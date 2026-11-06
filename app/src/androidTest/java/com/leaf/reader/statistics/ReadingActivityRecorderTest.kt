@@ -21,6 +21,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -96,12 +97,16 @@ class ReadingActivityRecorderTest {
 
     @Test fun ownerCancellationStillDrainsTheLastObservedInterval() = runBlocking {
         val recorder = createRecorder()
-        recorder.foregroundEligible(true)
-        time(1_000)
-        scope.cancel() // Models ViewModel.onCleared without a surviving viewModelScope.
-        recorder.close()
+        withContext(Dispatchers.Main.immediate) {
+            recorder.foregroundEligible(true)
+            time(1_000)
+            scope.cancel() // Cancel before the owner-dispatched heartbeat can record the tail.
+        }
+        // Cancellation can return before the owner's completion handler closes the recorder.
+        // Require the independent writer to commit the tail before teardown can close it.
+        val saved = withTimeout(5_000) { repository.sessions.first { it.isNotEmpty() } }
         recorder.awaitClosed()
-        assertEquals(1_000L, repository.sessions.first().sumOf { it.activeDurationMs })
+        assertEquals(1_000L, saved.sumOf { it.activeDurationMs })
         time(100_000)
         recorder.interact()
         assertEquals(1_000L, repository.sessions.first().sumOf { it.activeDurationMs })

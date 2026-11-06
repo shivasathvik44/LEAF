@@ -1,6 +1,7 @@
 package com.leaf.reader.data.readium
 
 import androidx.fragment.app.Fragment
+import androidx.annotation.MainThread
 import com.github.barteksc.pdfviewer.PDFView
 import android.graphics.Rect
 import android.net.Uri
@@ -259,6 +260,11 @@ class ReaderDocument(
         latestLocator = locator
         val progress = locator.locations.totalProgression?.takeIf(Double::isFinite)?.coerceIn(0.0, 1.0) ?: 0.0
         _location.value = ReaderLocation(locator.toJSON().toString(), progress, locator.title, locator.locations.position)
+    }
+
+    @MainThread
+    internal fun onNativeLocationChanged(locator: Locator) {
+        accept(locator)
         if (format == PublicationFormat.EPUB) confirmEpubFrame(navigatorGeneration)
     }
 
@@ -391,6 +397,7 @@ class ReaderDocument(
     }
     fun currentLocation(): ReaderLocation? {
         // Snapshot the navigator synchronously before a close/reopen can outrun Flow collection.
+        // This only samples the locator. WebView readiness is observed on the main thread.
         navigator?.currentLocator?.value?.let(::accept)
         return _location.value
     }
