@@ -185,6 +185,13 @@ Use original or legally redistributable publications. Record each fixture's auth
 
 ## CI and release
 
-The Android CI workflow installs `platforms;android-37.0` and `build-tools;37.0.0`, builds the app, runs JVM unit tests and lint, and runs instrumentation on emulator API levels 24 and 35. An app compiled against API 37 can run on API 35; API 37 device validation remains a separate release check. Reports are retained even when a check fails. Workflow configuration must be validated on GitHub before CI is reported as passing. The regular emulator matrix does not by itself establish 16 KB page-size compatibility.
+Both Android CI jobs use the SDK setup action to install `platform-tools`,
+`platforms;android-37.0` and `build-tools;37.0.0`. The build job runs JVM unit
+tests and lint and uploads the debug APK when its checks pass. The device jobs
+run the full instrumentation suite on Google APIs x86_64 images for API 24 and
+35, with a 25-minute limit on emulator setup and test execution. Reports are
+retained even when a check fails. GitHub Actions must pass before CI can be
+reported as verified. API 37 and 16 KB page-size validation are separate release
+checks.
 
 Before release, repeat the full fixture and device matrix, inspect the merged release manifest and dependency licenses, verify signing with owner-supplied credentials, and record the APK checksum and output path. An unsigned release artifact or debug-signed APK is not a production signed release.
