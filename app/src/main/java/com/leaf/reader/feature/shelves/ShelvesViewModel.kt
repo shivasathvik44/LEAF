@@ -69,16 +69,17 @@ class ShelvesViewModel @Inject constructor(
         editorState.value?.takeUnless { it.saving }?.let { current ->
             // Reject the entire over-limit edit, rather than retaining a potentially huge
             // clipboard payload in SavedStateHandle or silently shortening the user's text.
+            // An IME can report the unchanged value when it resets after rejection.
             if (ShelfLimits.characters(value) > ShelfLimits.MAX_NAME_CHARACTERS) {
                 setEditor(current.copy(error = "That name is too long. The new text was not added; use up to 100 characters."))
-            } else setEditor(current.copy(name = value, error = null))
+            } else if (value != current.name) setEditor(current.copy(name = value, error = null))
         }
     }
     fun editorDescription(value: String) {
         editorState.value?.takeUnless { it.saving }?.let { current ->
             if (!ShelfLimits.validDescription(value)) {
                 setEditor(current.copy(error = "That description is too long. The new text was not added; use up to 2000 characters."))
-            } else setEditor(current.copy(description = value, error = null))
+            } else if (value != current.description) setEditor(current.copy(description = value, error = null))
         }
     }
     fun dismissEditor() { if (editorState.value?.saving != true) setEditor(null) }

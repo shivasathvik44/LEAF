@@ -119,7 +119,6 @@ class ReadingActivityRecorder internal constructor(
     private var storagePaused = false
     private var writeFailed = false
     private var closeFailures = 0
-    private var screenOffObserved = false
     private var lastInputElapsed: Long? = null
     private var heartbeat: Job? = null
     private var retryJob: Job? = null
@@ -132,11 +131,14 @@ class ReadingActivityRecorder internal constructor(
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             synchronized(lock) {
-                when (intent?.action) {
-                    Intent.ACTION_SCREEN_OFF -> screenOffObserved = true
-                    Intent.ACTION_SCREEN_ON, Intent.ACTION_USER_PRESENT -> screenOffObserved = false
+                if (closed) return
+                if (intent?.action == Intent.ACTION_SCREEN_OFF) {
+                    // A delayed screen-off broadcast still proves a gap, even if the
+                    // device has already started waking when the callback arrives.
+                    if (recording) stopRecordingLocked(includeTrailingObservation = false)
+                } else {
+                    refreshLocked(knownForegroundTransition = false)
                 }
-                if (!closed) refreshLocked(knownForegroundTransition = false)
             }
         }
     }
@@ -235,7 +237,7 @@ class ReadingActivityRecorder internal constructor(
         }
     }
 
-    private fun systemEligible(): Boolean = monitorAvailable && !screenOffObserved && power?.isInteractive == true &&
+    private fun systemEligible(): Boolean = monitorAvailable && power?.isInteractive == true &&
         keyguard?.isKeyguardLocked == false
 
     private fun refreshLocked(knownForegroundTransition: Boolean) {
@@ -250,9 +252,9 @@ class ReadingActivityRecorder internal constructor(
             // A known caller transition while still unlocked can preserve the observed tail.
             stopRecordingLocked(includeTrailingObservation = knownForegroundTransition && systemEligible)
         }
-        // While the visible reader is storage-paused, heartbeats can retry its bounded
-        // queue but cannot earn time. No heartbeat survives background/lock/close.
-        if (!closed && externallyEligible && systemEligible) {
+        // Focus and screen-on can return before the keyguard or power state settles.
+        // Keep rechecking while the UI is eligible; only verified device state earns time.
+        if (!closed && externallyEligible && monitorAvailable) {
             if (heartbeat?.isActive != true) heartbeat = ownerScope.launch {
                 while (isActive) { delay(HEARTBEAT_MS); checkpoint() }
             }

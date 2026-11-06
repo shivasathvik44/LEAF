@@ -54,6 +54,7 @@ class ReaderViewModel @Inject constructor(
     private var searchJob: Job? = null
     @Volatile private var searchGeneration = 0L
     private var activityRecorder: ReadingActivityRecorder? = null
+    private var readerForeground = false
     private var hasReadInForeground = false
     private var markedOpened = false
 
@@ -85,13 +86,15 @@ class ReaderViewModel @Inject constructor(
                 observe { document.location.collect { location ->
                     if (location != null) {
                         _state.update { it.copy(location = location) }
-                        if (hasReadInForeground && document.rendered.value) writer?.offer(location)
+                        // A settled native locator can arrive before its frame confirmation.
+                        // Once reading has started, keep saving these locations through jumps.
+                        if (hasReadInForeground) writer?.offer(location)
                     }
                 } }
                 observe { document.rendered.collect { ready ->
                     if (_state.value.document === document) {
-                        if (!ready) activityRecorder?.foregroundEligible(false)
                         _state.update { it.copy(contentReady = ready) }
+                        refreshForegroundEligibility()
                     }
                 } }
                 val recorder = activityRecorder
@@ -107,12 +110,18 @@ class ReaderViewModel @Inject constructor(
     }
     fun retry() { val id = bookId ?: return; closeReader(); initialize(id) }
     fun foregroundEligible(value: Boolean) {
-        val document = _state.value.document
-        val eligible = value && document?.rendered?.value == true && _state.value.error == null
+        readerForeground = value
+        refreshForegroundEligibility()
+    }
+
+    private fun refreshForegroundEligibility() {
+        val state = _state.value
+        val document = state.document
+        val eligible = readerForeground && document?.rendered?.value == true && !state.loading && state.error == null
         activityRecorder?.foregroundEligible(eligible)
         if (eligible) {
             hasReadInForeground = true
-            document?.currentLocation()?.let { writer?.offer(it) }
+            document.currentLocation()?.let { writer?.offer(it) }
             if (!markedOpened) {
                 val id = bookId ?: return
                 markedOpened = true

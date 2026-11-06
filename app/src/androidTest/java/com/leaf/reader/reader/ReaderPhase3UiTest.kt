@@ -8,6 +8,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
 import android.webkit.WebView
+import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -29,10 +30,12 @@ import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextReplacement
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.fragment.app.FragmentManager
 import androidx.lifecycle.ViewModelProvider
 import androidx.room.withTransaction
 import androidx.test.espresso.Espresso.closeSoftKeyboard
 import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.Espresso.pressBack
 import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.matcher.RootMatchers.withDecorView
 import androidx.test.espresso.matcher.ViewMatchers.hasDescendant
@@ -149,7 +152,7 @@ class ReaderPhase3UiTest {
         openReaderPanel("Contents")
         compose.onNodeWithText("The river path").performClick()
         awaitState { it.document?.currentLocation()?.locatorJson?.contains("chapter2") == true }
-        awaitJavascript("document.querySelector('h1')?.innerText", "\"The river path\"")
+        awaitJavascript(HEADING_TEXT, "\"The river path\"")
         openReaderPanel("Highlights and notes")
         compose.onNodeWithText(originalNote).assertIsDisplayed()
         compose.onNodeWithText("Go to passage").performClick()
@@ -181,12 +184,21 @@ class ReaderPhase3UiTest {
             model = ViewModelProvider(activity)["leaf-reader-$id", ReaderViewModel::class.java]
         }
         assertSame("Configuration changes must retain the actual reader ViewModel", retainedModel, model)
-        awaitState { it.document?.currentLocation() != null }
-        awaitJavascript(visibleColor("156,204,155"), "true")
         compose.onNodeWithText("Highlights and notes").assertIsDisplayed()
         compose.onNodeWithText(editedNote).assertIsDisplayed()
         assertEquals(edited, dependencies.annotations().highlights(id).first().single())
 
+        // Verify the restored sheet first, then uncover the WebView before checking its viewport.
+        pressBack()
+        compose.onNodeWithText("Highlights and notes").assertDoesNotExist()
+        try {
+            awaitState { it.contentReady }
+        } catch (timeout: ComposeTimeoutException) {
+            throw AssertionError("The recreated reader must render after the restored sheet is dismissed. ${nativeReaderDiagnostic()}", timeout)
+        }
+        awaitJavascript(visibleColor("156,204,155"), "true")
+        openReaderPanel("Highlights and notes")
+        compose.onNodeWithText(editedNote).assertIsDisplayed()
         compose.onNodeWithText("Edit note").performClick()
         compose.onNodeWithText("Delete highlight and note").performScrollTo().performClick()
         withTimeout(15_000) { dependencies.annotations().highlights(id).first { it.isEmpty() } }
@@ -221,7 +233,7 @@ class ReaderPhase3UiTest {
             .performClick()
 
         awaitState { it.document?.currentLocation()?.locatorJson?.contains("chapter3") == true }
-        awaitJavascript("document.querySelector('h1')?.innerText", "\"A warm return\"")
+        awaitJavascript(HEADING_TEXT, "\"A warm return\"")
         val progress = withTimeout(15_000) {
             dependencies.reading().progress(id).first { it?.locatorJson?.contains("chapter3") == true }
         }
@@ -242,8 +254,8 @@ class ReaderPhase3UiTest {
         val firstPageVisible = """
             (()=>{
                 if(!location.pathname.endsWith('/chapter1.xhtml'))return false;
-                const viewport=window.visualViewport,left=viewport?.offsetLeft??0,top=viewport?.offsetTop??0;
-                const width=viewport?.width??innerWidth,height=viewport?.height??innerHeight;
+                const viewport=window.visualViewport,left=viewport?viewport.offsetLeft:0,top=viewport?viewport.offsetTop:0;
+                const width=viewport?viewport.width:innerWidth,height=viewport?viewport.height:innerHeight;
                 const visible=element=>{
                     if(!element)return false;
                     const range=document.createRange();range.selectNodeContents(element);
@@ -314,7 +326,7 @@ class ReaderPhase3UiTest {
         openReaderPanel("Hide controls")
         awaitState { !it.controlsVisible }
         pointerOnText("#passage", 2, 8, longPress = true)
-        awaitJavascript("window.getSelection()?.toString().trim().toLowerCase()", "\"silver\"")
+        awaitJavascript(SELECTED_TEXT, "\"silver\"")
         // Android's floating text toolbar has a non-focusable native PopupWindow root.
         onView(withText("Highlight"))
             .inRoot(withDecorView(hasDescendant(withText("Highlight"))))
@@ -419,20 +431,35 @@ class ReaderPhase3UiTest {
     private fun annotationViewportDiagnostic(): String {
         val dom = javascript("""
             (()=>{
-                const rect=r=>({x:r.x,y:r.y,width:r.width,height:r.height});
+                const rect=r=>({x:r.left,y:r.top,width:r.width,height:r.height});
                 const viewport=window.visualViewport, passage=document.querySelector('#passage');
                 const range=document.createRange();if(passage)range.selectNodeContents(passage);
                 const highlights=Array.from(document.querySelectorAll('[class*=\"r2-highlight-\"]')).slice(0,20).map(e=>{
                     const style=getComputedStyle(e);return {color:style.backgroundColor,opacity:style.opacity,
                         visibility:style.visibility,rects:Array.from(e.getClientRects()).map(rect)};
                 });
-                return {href:location.href,scrollX,scrollY,viewport:{width:viewport?.width??innerWidth,
-                    height:viewport?.height??innerHeight,left:viewport?.offsetLeft??0,top:viewport?.offsetTop??0,scale:viewport?.scale},
+                return {href:location.href,scrollX,scrollY,viewport:{width:viewport?viewport.width:innerWidth,
+                    height:viewport?viewport.height:innerHeight,left:viewport?viewport.offsetLeft:0,
+                    top:viewport?viewport.offsetTop:0,scale:viewport?viewport.scale:null},
                     passage:passage?Array.from(range.getClientRects()).map(rect):null,highlights};
             })()
         """.trimIndent())
         // Every locator below belongs to this test's own CC0 fixture and UUID book.
         return "savedLocators=${model?.state?.value?.highlights?.map { it.locatorJson }}; nativeDOM=$dom"
+    }
+
+    private fun nativeReaderDiagnostic(): String {
+        fun fragments(manager: FragmentManager): String = manager.fragments.joinToString(prefix = "[", postfix = "]") { fragment ->
+            val children = if (fragment.isAdded) fragments(fragment.childFragmentManager) else "[]"
+            "${fragment.javaClass.simpleName}(${fragment.lifecycle.currentState},view=${fragment.view != null},children=$children)"
+        }
+        var diagnostic = ""
+        compose.activityRule.scenario.onActivity { activity ->
+            val state = requireNotNull(model).state.value
+            diagnostic = "focus=${activity.hasWindowFocus()}, loading=${state.loading}, error=${state.error}, " +
+                "fragments=${fragments(activity.supportFragmentManager)}"
+        }
+        return diagnostic
     }
 
     private fun visibleWebView(view: View): WebView? {
@@ -448,23 +475,24 @@ class ReaderPhase3UiTest {
             (()=>{const n=document.querySelector('$selector').firstChild;const r=document.createRange();
             r.setStart(n,$start);r.setEnd(n,$end);const b=r.getBoundingClientRect();
             const viewport=window.visualViewport;
-            const x=b.x+b.width/2,y=b.y+b.height/2,hit=document.elementFromPoint(x,y);
-            return {x,y,width:viewport?.width??window.innerWidth,
-            left:viewport?.offsetLeft??0,top:viewport?.offsetTop??0,hitTag:hit?.tagName,hitId:hit?.id,href:location.href};})()
+            const x=b.left+b.width/2,y=b.top+b.height/2,hit=document.elementFromPoint(x,y);
+            return {x,y,width:viewport?viewport.width:window.innerWidth,
+            left:viewport?viewport.offsetLeft:0,top:viewport?viewport.offsetTop:0,
+            hitTag:hit?hit.tagName:null,hitId:hit?hit.id:null,href:location.href};})()
         """.trimIndent(), "selector=$selector", longPress)
     }
 
     private fun tapVisibleUnannotatedText() {
         pointerAtDomPoint("""
             (()=>{
-                const viewport=window.visualViewport,left=viewport?.offsetLeft??0,top=viewport?.offsetTop??0;
-                const width=viewport?.width??innerWidth,height=viewport?.height??innerHeight;
+                const viewport=window.visualViewport,left=viewport?viewport.offsetLeft:0,top=viewport?viewport.offsetTop:0;
+                const width=viewport?viewport.width:innerWidth,height=viewport?viewport.height:innerHeight;
                 const highlights=Array.from(document.querySelectorAll('[class*="r2-highlight-"]'))
                     .flatMap(e=>Array.from(e.getClientRects()));
                 for(const element of document.querySelectorAll('h1,p:not(#passage)')) {
                     const range=document.createRange();range.selectNodeContents(element);
                     for(const rect of range.getClientRects()) {
-                        const x=rect.x+rect.width/2,y=rect.y+rect.height/2;
+                        const x=rect.left+rect.width/2,y=rect.top+rect.height/2;
                         if(rect.width<=0||rect.height<=0||x<=left||x>=left+width||y<=top||y>=top+height) continue;
                         if(highlights.some(r=>x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom)) continue;
                         const hit=document.elementFromPoint(x,y);
@@ -512,7 +540,7 @@ class ReaderPhase3UiTest {
             instrumentation.sendPointerSync(it); it.recycle()
         }
         instrumentation.waitForIdleSync()
-        lastPointerDescription += " controlsAfter=${model?.state?.value?.controlsVisible} DOMselectionAfter=${javascript("window.getSelection()?.toString().trim().toLowerCase()") } " +
+        lastPointerDescription += " controlsAfter=${model?.state?.value?.controlsVisible} DOMselectionAfter=${javascript(SELECTED_TEXT)} " +
             "activeAccessibilityPackage=${instrumentation.uiAutomation.rootInActiveWindow?.packageName} fullscreen=$lastSystemPromptDescription"
     }
 
@@ -599,11 +627,14 @@ class ReaderPhase3UiTest {
 
     private fun visibleColor(rgb: String): String =
         "Array.from(document.querySelectorAll('[class*=\"r2-highlight-\"]')).some(e=>{" +
-            "const v=window.visualViewport,l=v?.offsetLeft??0,t=v?.offsetTop??0,w=v?.width??innerWidth,h=v?.height??innerHeight,s=getComputedStyle(e);" +
+            "const v=window.visualViewport,l=v?v.offsetLeft:0,t=v?v.offsetTop:0,w=v?v.width:innerWidth,h=v?v.height:innerHeight,s=getComputedStyle(e);" +
             "return s.visibility!=='hidden'&&Number(s.opacity)>0&&s.backgroundColor.replace(/\\s/g,'').includes('$rgb')&&" +
             "Array.from(e.getClientRects()).some(r=>r.width>0&&r.height>0&&r.right>l&&r.left<l+w&&r.bottom>t&&r.top<t+h);})"
 
     companion object {
+        // The API 24 CI image uses Chrome 69 for WebView, which predates optional chaining.
+        private const val HEADING_TEXT = "(() => { const heading = document.querySelector('h1'); return heading && heading.innerText; })()"
+        private const val SELECTED_TEXT = "(() => { const selection = window.getSelection(); return selection && selection.toString().trim().toLowerCase(); })()"
         private const val BLUE = 0xFF94C9E8L
         private const val GREEN = 0xFF9CCC9BL
         private const val SAVE_FAILURE = "This annotation could not be saved. Your draft has been kept. Please retry."

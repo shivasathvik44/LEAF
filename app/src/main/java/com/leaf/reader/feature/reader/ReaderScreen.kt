@@ -46,6 +46,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.fragment.compose.AndroidFragment
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.leaf.reader.core.util.PublicationFormat
@@ -72,7 +73,6 @@ fun ReaderScreen(bookId: String, onBack: () -> Unit) {
     var addingBookmark by rememberSaveable { mutableStateOf(false) }
     val document = state.document
     ReadingActivityEligibilityEffect(
-        readerUsable = state.contentReady && document != null && !state.loading && state.error == null,
         modalOpen = panel != null || overflow || addingBookmark || state.selection != null || state.editingHighlight != null,
         onEligibilityChanged = model::foregroundEligible,
     )
@@ -119,6 +119,9 @@ fun ReaderScreen(bookId: String, onBack: () -> Unit) {
                 AndroidFragment<ReaderHostFragment>(
                     modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility),
                     arguments = fragmentArguments,
+                    // The host Activity already caps this Fragment's lifecycle. The Nav entry
+                    // can restore at CREATED while FragmentManager is still restoring state.
+                    maxLifecycle = Lifecycle.State.RESUMED,
                 ) { host ->
                     host.onTap = model::toggleControls
                     host.onInteraction = model::interact

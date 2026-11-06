@@ -75,7 +75,7 @@ class ReaderHostFragment : Fragment() {
         val document = retainedDocument ?: return
         document.attach(navigator, viewLifecycleOwner.lifecycleScope)
         observer?.cancel()
-        observer = viewLifecycleOwner.lifecycleScope.launch { navigator.currentLocator.collect(document::accept) }
+        observer = viewLifecycleOwner.lifecycleScope.launch { navigator.currentLocator.collect(document::onNativeLocationChanged) }
         decorationRestore?.cancel()
         decorationRestore = viewLifecycleOwner.lifecycleScope.launch {
             try { document.restoreHighlights() }

@@ -61,15 +61,14 @@ class BookImportIntegrationTest {
         sourceRoot = File(target.cacheDir, "publication-fixtures/$testId").apply { check(mkdirs()) }
         privateContext = object : ContextWrapper(target) {
             override fun getFilesDir(): File = File(testRoot, "files").apply { check(isDirectory || mkdirs()) }
-            override fun getApplicationContext(): Context = this
         }
         database = newDatabase()
         books = BookRepository(database)
         reading = ReadingRepository(database)
         annotations = AnnotationRepository(database)
         files = ManagedBookFiles(privateContext)
-        publications = PublicationRepository(privateContext)
-        importer = BookImportRepository(privateContext, files, books, publications)
+        publications = PublicationRepository(target)
+        importer = BookImportRepository(target, files, books, publications)
         preferenceJob = SupervisorJob()
         val store = PreferenceDataStoreFactory.create(scope = CoroutineScope(Dispatchers.IO + preferenceJob), produceFile = { File(testRoot, "preferences.preferences_pb") })
         preferences = PreferencesRepository(store)
@@ -341,7 +340,7 @@ class BookImportIntegrationTest {
         assertEquals(0, cleanup.await())
     }
 
-    private fun newDatabase(): LeafDatabase = Room.databaseBuilder(privateContext, LeafDatabase::class.java, File(testRoot, "library.db").absolutePath).build()
+    private fun newDatabase(): LeafDatabase = Room.databaseBuilder(target, LeafDatabase::class.java, File(testRoot, "library.db").absolutePath).build()
     private fun temporaryFiles(): List<File> = File(privateContext.filesDir, "cache/temporary-imports").listFiles().orEmpty().toList()
     private fun uri(file: File): Uri = FileProvider.getUriForFile(target, "${target.packageName}.fixtures", file)
     private fun source(name: String): Pair<Uri, File> {

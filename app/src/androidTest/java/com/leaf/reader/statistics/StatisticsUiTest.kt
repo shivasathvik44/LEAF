@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
@@ -105,10 +106,12 @@ class StatisticsUiTest {
         assertEquals(120_000L, model.state.value.activity.history.single { it.bookId == first.id }.activeDurationMs)
 
         showMonth(YearMonth.from(firstSlot.day))
-        compose.onNodeWithTag("activity-day-${firstSlot.day}").performScrollTo().performClick()
+        val dayTag = "activity-day-${firstSlot.day}"
+        showCalendar()
+        compose.onNodeWithTag(dayTag).performScrollTo().performClick()
         awaitUi { it.selectedDay == firstSlot.day && it.visibleHistory.any { row -> row.bookId == first.id } &&
             it.visibleHistory.none { row -> row.bookId == second.id } }
-        compose.onNodeWithTag("activity-day-${firstSlot.day}").performScrollTo().assertIsSelected()
+        compose.waitUntil(20_000) { compose.onAllNodes(hasTestTag(dayTag) and isSelected()).fetchSemanticsNodes().size == 1 }
         showHistory(first, firstSlot.day)
         assertEquals(1, compose.onAllNodesWithTag(historyTag(first, firstSlot.day)).fetchSemanticsNodes().size)
 
@@ -119,7 +122,8 @@ class StatisticsUiTest {
         }
         assertSame(retained, model)
         awaitUi { it.selectedDay == firstSlot.day && it.month == YearMonth.from(firstSlot.day) }
-        compose.onNodeWithTag("activity-day-${firstSlot.day}").performScrollTo().assertIsSelected()
+        showCalendar()
+        compose.onNodeWithTag(dayTag).performScrollTo().assertIsSelected()
         showHistory(first, firstSlot.day)
         compose.onNodeWithTag(historyTag(first, firstSlot.day)).performClick()
         compose.onNodeWithText("Back", substring = false).assertIsDisplayed()
@@ -162,11 +166,15 @@ class StatisticsUiTest {
     private fun showMonth(target: YearMonth) {
         repeat(3) {
             if (model.state.value.month == target) return
-            compose.onNodeWithTag("activity-list").performScrollToNode(hasTestTag("activity-calendar"))
+            showCalendar()
             compose.onNodeWithText("Previous", substring = false).performClick()
             compose.waitForIdle()
         }
         assertEquals("The selected historical month must be reachable", target, model.state.value.month)
+    }
+
+    private fun showCalendar() {
+        compose.onNodeWithTag("activity-list").performScrollToNode(hasTestTag("activity-calendar"))
     }
 
     private fun showHistory(book: Book, day: LocalDate) {

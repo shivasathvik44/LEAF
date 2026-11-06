@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — shelves and reading activity (verification pending)
+## Unreleased — shelves and reading activity, verified locally 2026-11-06
 
 - Added custom shelves with descriptions, cover collages, book counts, editing,
   membership management and a book-details shelf picker. Shelf deletion keeps books.
@@ -11,9 +11,11 @@
   treating a parsed publication or default locator as proof of usable content.
 - Keep failed checkpoint UUIDs for retry in a bounded in-memory backlog; pause
   accrual under storage pressure and surface save failures after reader closure.
-- Added accounting, projection, shelf transaction and real-screen/lifecycle tests.
-  The complete Phase 4 build, lint and device gate remains pending. Room stays at
-  schema 1; no destructive migration or new runtime PDF dependency is introduced.
+- Fixed native reader restoration on API 24, saved positions after search jumps,
+  and reading activity resumption after the screen wakes and unlocks.
+- Added accounting, projection, shelf transaction and real-screen lifecycle tests.
+  The debug build and lint passed. Device checks passed on API 24 and 35.
+- This milestone uses Room schema 1 and Readium's bundled PDF runtime.
 
 ## Unreleased — annotations and search, verified locally 2026-11-04
 
