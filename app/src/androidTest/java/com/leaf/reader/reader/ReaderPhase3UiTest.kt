@@ -2,7 +2,10 @@ package com.leaf.reader.reader
 
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.graphics.Rect
+import android.os.ParcelFileDescriptor
 import android.os.SystemClock
+import android.provider.Settings
+import android.view.InputDevice
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -96,6 +99,7 @@ class ReaderPhase3UiTest {
     private var lastSystemPromptDescription = "No fullscreen confirmation observed"
 
     @Before fun setUp() = runBlocking<Unit> {
+        shell("settings put secure immersive_mode_confirmations confirmed")
         // The Compose rule has already launched MainActivity. Inserting through its singleton
         // repository must update the production library Flow without relaunching the app.
         id = UUID.randomUUID().toString()
@@ -385,6 +389,11 @@ class ReaderPhase3UiTest {
         triggerName = null
     }
 
+    private fun shell(command: String) {
+        ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(command))
+            .use { it.readBytes() }
+    }
+
     private fun fixture(): File = File(directory, "standard.epub").also { file ->
         ZipInputStream(instrumentation.context.assets.open("publications/standard.epub")).use { input ->
             ZipOutputStream(file.outputStream()).use { output ->
@@ -532,12 +541,18 @@ class ReaderPhase3UiTest {
             assertTrue("The target must be inside the native WebView: $lastPointerDescription", isVisible && visible.contains(x.toInt(), y.toInt()))
         }
         val down = SystemClock.uptimeMillis()
-        MotionEvent.obtain(down, down, MotionEvent.ACTION_DOWN, x, y, 0).also {
-            instrumentation.sendPointerSync(it); it.recycle()
+        MotionEvent.obtain(down, down, MotionEvent.ACTION_DOWN, x, y, 0).apply {
+            source = InputDevice.SOURCE_TOUCHSCREEN
+        }.also {
+            assertTrue("Failed to inject pointer DOWN event", instrumentation.uiAutomation.injectInputEvent(it, true))
+            it.recycle()
         }
         SystemClock.sleep(if (longPress) 1_100 else 80)
-        MotionEvent.obtain(down, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, x, y, 0).also {
-            instrumentation.sendPointerSync(it); it.recycle()
+        MotionEvent.obtain(down, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, x, y, 0).apply {
+            source = InputDevice.SOURCE_TOUCHSCREEN
+        }.also {
+            assertTrue("Failed to inject pointer UP event", instrumentation.uiAutomation.injectInputEvent(it, true))
+            it.recycle()
         }
         instrumentation.waitForIdleSync()
         lastPointerDescription += " controlsAfter=${model?.state?.value?.controlsVisible} DOMselectionAfter=${javascript(SELECTED_TEXT)} " +
@@ -559,7 +574,7 @@ class ReaderPhase3UiTest {
         if (hidden && !immersiveConfirmationChecked) {
             // Advancing Compose above actually closes the menu and applies immersive mode.
             // Android's delayed first-use prompt can only appear after those effects run.
-            dismissFullscreenConfirmation(timeoutMillis = 2_000)
+            dismissFullscreenConfirmation(timeoutMillis = 4_000)
             immersiveConfirmationChecked = true
             compose.waitForIdle()
         }
@@ -591,6 +606,9 @@ class ReaderPhase3UiTest {
 
     /** Acknowledge Android's real first-immersive-use prompt, which can cover the EPUB. */
     private fun dismissFullscreenConfirmation(timeoutMillis: Long) {
+        val confirmed = Settings.Secure.getString(context.contentResolver, "immersive_mode_confirmations")
+            ?.contains("confirmed") == true
+        if (confirmed) return
         val automation = instrumentation.uiAutomation
         val serviceInfo = automation.serviceInfo
         val originalFlags = serviceInfo.flags
