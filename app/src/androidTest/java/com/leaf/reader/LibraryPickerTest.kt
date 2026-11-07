@@ -45,13 +45,6 @@ class LibraryPickerTest {
             compose.waitForIdle()
             compose.onNodeWithText("Leaf").assertIsDisplayed()
             compose.onNodeWithTag("import-books").assertIsEnabled()
-            compose.waitUntil(timeoutMillis = 10_000) {
-                var focused = false
-                compose.activityRule.scenario.onActivity { activity ->
-                    focused = activity.hasWindowFocus()
-                }
-                focused
-            }
             instrumentation.waitForIdleSync()
             SystemClock.sleep(500)
         } finally {

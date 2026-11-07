@@ -111,14 +111,13 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel
-          ram-size: 4096M
+          ram-size: 2048M
           heap-size: 512M
           cores: 2
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           script: |
             adb shell input keyevent 82 || true
-            adb shell wm dismiss-keyguard || true
             adb shell settings put secure immersive_mode_confirmations confirmed || true
             ./gradlew --no-daemon --stacktrace :app:connectedDebugAndroidTest
 
