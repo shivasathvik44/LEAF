@@ -5,6 +5,7 @@ import android.app.Instrumentation
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.SystemClock
+import android.view.WindowManager
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -23,6 +24,9 @@ class LibraryPickerTest {
 
     @Test fun importOpensSystemDocumentsAndCancellationReturnsToLibrary() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
+        compose.activityRule.scenario.onActivity { activity ->
+            activity.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
         val filter = IntentFilter(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             addDataType("*/*")
@@ -41,6 +45,15 @@ class LibraryPickerTest {
             compose.waitForIdle()
             compose.onNodeWithText("Leaf").assertIsDisplayed()
             compose.onNodeWithTag("import-books").assertIsEnabled()
+            compose.waitUntil(timeoutMillis = 10_000) {
+                var focused = false
+                compose.activityRule.scenario.onActivity { activity ->
+                    focused = activity.hasWindowFocus()
+                }
+                focused
+            }
+            instrumentation.waitForIdleSync()
+            SystemClock.sleep(500)
         } finally {
             instrumentation.removeMonitor(monitor)
             val targetPackage = instrumentation.targetContext.packageName
