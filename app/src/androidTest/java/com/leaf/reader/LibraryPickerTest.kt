@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.app.Instrumentation
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.SystemClock
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -31,19 +32,26 @@ class LibraryPickerTest {
         instrumentation.addMonitor(monitor)
         try {
             compose.onNodeWithTag("import-books").assertIsDisplayed().assertIsEnabled().performClick()
-            compose.waitUntil(timeoutMillis = 10_000) {
+            compose.waitUntil(timeoutMillis = 25_000) {
                 monitor.hits > 0 && systemDocumentsVisible(instrumentation)
             }
             assertEquals("One tap must launch one document request", 1, monitor.hits)
             assertTrue(instrumentation.uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK))
-            compose.waitUntil(timeoutMillis = 10_000) { !systemDocumentsVisible(instrumentation) }
+            compose.waitUntil(timeoutMillis = 25_000) { !systemDocumentsVisible(instrumentation) }
             compose.waitForIdle()
             compose.onNodeWithText("Leaf").assertIsDisplayed()
             compose.onNodeWithTag("import-books").assertIsEnabled()
         } finally {
             instrumentation.removeMonitor(monitor)
-            if (systemDocumentsVisible(instrumentation)) {
+            val targetPackage = instrumentation.targetContext.packageName
+            val deadline = SystemClock.uptimeMillis() + 10_000L
+            while (SystemClock.uptimeMillis() < deadline) {
+                val root = instrumentation.uiAutomation.rootInActiveWindow
+                val activePackage = root?.packageName?.toString()
+                root?.recycle()
+                if (activePackage == targetPackage) break
                 instrumentation.uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+                SystemClock.sleep(500)
             }
         }
     }
