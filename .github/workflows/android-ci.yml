@@ -118,6 +118,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           script: |
             adb shell input keyevent 82 || true
+            adb shell settings put secure immersive_mode_confirmations confirmed || true
             ./gradlew --no-daemon --stacktrace :app:connectedDebugAndroidTest
 
       - name: Upload instrumentation reports

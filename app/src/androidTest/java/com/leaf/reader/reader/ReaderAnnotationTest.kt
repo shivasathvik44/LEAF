@@ -2,7 +2,9 @@ package com.leaf.reader.reader
 
 import android.content.Intent
 import android.graphics.Rect
+import android.os.ParcelFileDescriptor
 import android.os.SystemClock
+import android.view.InputDevice
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -55,7 +57,10 @@ class ReaderAnnotationTest {
     private var bookId: String? = null
     private var scenario: ActivityScenario<ReaderHarnessActivity>? = null
 
-    @Before fun setUp() { directory = File(context.cacheDir, "reader-annotation-tests/${UUID.randomUUID()}").apply { check(mkdirs()) } }
+    @Before fun setUp() {
+        shell("settings put secure immersive_mode_confirmations confirmed")
+        directory = File(context.cacheDir, "reader-annotation-tests/${UUID.randomUUID()}").apply { check(mkdirs()) }
+    }
     @After fun tearDown() = runBlocking {
         scenario?.close()
         bookId?.let { dependencies.books().removeRecord(it) }
@@ -349,9 +354,24 @@ class ReaderAnnotationTest {
                 bounds.contains(x.toInt(), y.toInt()))
         }
         val start = SystemClock.uptimeMillis()
-        MotionEvent.obtain(start, start, MotionEvent.ACTION_DOWN, x, y, 0).also { instrumentation.sendPointerSync(it); it.recycle() }
+        MotionEvent.obtain(start, start, MotionEvent.ACTION_DOWN, x, y, 0).apply {
+            source = InputDevice.SOURCE_TOUCHSCREEN
+        }.also {
+            assertTrue("Failed to inject pointer DOWN event", instrumentation.uiAutomation.injectInputEvent(it, true))
+            it.recycle()
+        }
         SystemClock.sleep(1_100)
-        MotionEvent.obtain(start, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, x, y, 0).also { instrumentation.sendPointerSync(it); it.recycle() }
+        MotionEvent.obtain(start, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, x, y, 0).apply {
+            source = InputDevice.SOURCE_TOUCHSCREEN
+        }.also {
+            assertTrue("Failed to inject pointer UP event", instrumentation.uiAutomation.injectInputEvent(it, true))
+            it.recycle()
+        }
         instrumentation.waitForIdleSync()
+    }
+
+    private fun shell(command: String) {
+        ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(command))
+            .use { it.readBytes() }
     }
 }
