@@ -27,6 +27,8 @@ data class StorageRecoveryReport(
     val missingBookCopies: Int,
 )
 
+data class RecoveredBookCopy(val token: String, val format: PublicationFormat, val bytes: Long, val modifiedAt: Long)
+
 /** Owns private imported copies only. No operation accepts or removes an original source URI. */
 @Singleton
 class ManagedBookFiles @Inject constructor(@ApplicationContext context: Context) {
@@ -102,6 +104,21 @@ class ManagedBookFiles @Inject constructor(@ApplicationContext context: Context)
     /** Clears only Leaf-owned abandoned import files. Recovery copies are deliberately excluded. */
     suspend fun clearTemporaryCache(): Int = withContext(Dispatchers.IO) { exclusive { clearTemporaryLocked().first } }
 
+    internal fun recoveredBooksLocked(): List<RecoveredBookCopy> {
+        val directory = recoveryBooksDirectory()
+        return directory.listFiles().orEmpty().mapNotNull { file ->
+            val format = PublicationFormat.entries.find { it.extension == file.extension } ?: return@mapNotNull null
+            if (!file.isFile || !isDirectChild(file, directory)) return@mapNotNull null
+            RecoveredBookCopy(file.name, format, file.length(), file.lastModified())
+        }.sortedWith(compareByDescending<RecoveredBookCopy> { it.modifiedAt }.thenBy { it.token })
+    }
+
+    internal fun recoveredBookFileLocked(token: String): File? {
+        val directory = recoveryBooksDirectory()
+        val file = File(directory, token)
+        return file.takeIf { it.isFile && isDirectChild(it, directory) && PublicationFormat.entries.any { format -> format.extension == it.extension } }
+    }
+
     private fun clearTemporaryLocked(): Pair<Int, Int> {
         var removed = 0
         var retained = 0
@@ -145,6 +162,7 @@ class ManagedBookFiles @Inject constructor(@ApplicationContext context: Context)
     private fun coversDirectory(): File = ensureDirectory(File(root(), "covers"))
     private fun temporaryDirectory(): File = ensureDirectory(File(ensureDirectory(File(root(), "cache")), "temporary-imports"))
     private fun recoveryDirectory(): File = ensureDirectory(File(root(), "recovery"))
+    private fun recoveryBooksDirectory(): File = ensureDirectory(File(recoveryDirectory(), "books"))
 
     private fun ensureDirectory(directory: File): File {
         if (directory.canonicalFile != directory.absoluteFile || (!directory.isDirectory && !directory.mkdirs())) throw BookStorageException()

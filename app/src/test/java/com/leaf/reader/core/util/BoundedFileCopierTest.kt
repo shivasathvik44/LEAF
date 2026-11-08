@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
+import java.io.OutputStream
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -82,6 +83,18 @@ class BoundedFileCopierTest {
         }
         assertEquals(ImportProblem.UNREADABLE_CONTENT, error.problem)
         assertFalse(error.message.orEmpty().contains("secret-book"))
+    }
+
+    @Test
+    fun storageFailureAfterReserveCheckIsDistinctFromSourceReadFailure() {
+        val output = object : OutputStream() {
+            override fun write(b: Int) = throw IOException("ENOSPC at /private/leaf-import-1.epub")
+        }
+        val error = assertThrows(PublicationImportException::class.java) {
+            BoundedFileCopier.copy("book".byteInputStream(), output, availableBytes = { Long.MAX_VALUE })
+        }
+        assertEquals(ImportProblem.STORAGE_WRITE_FAILED, error.problem)
+        assertFalse(error.message.orEmpty().contains("/private/"))
     }
 
     @Test

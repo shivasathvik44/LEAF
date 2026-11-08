@@ -97,3 +97,18 @@ Capture the resolved app graphs and inspect each direct and transitive artifact:
 ```
 
 Reconcile versions and bundled notices against those graphs, including embedded JARs, fonts, JavaScript/CSS, and native libraries that may not appear as independent Maven coordinates. Review merged debug/release manifests for permissions/components, inspect release logs, and test offline operation. No analytics, advertisements, tracking SDKs, accounts, or unnecessary network modules belong in Leaf. A completed public release license/privacy audit has not yet been recorded.
+
+### Phase 5 resolved artifact review
+
+The release classpath resolves the pinned Readium 3.4.0 stack and its existing
+PDFiumAndroid 1.9.8 and AndroidPdfViewer 3.2.8 artifacts. The inspection also
+identified jsoup 1.23.2, Timber 5.0.1, Okio 3.15.0, Accompanist 0.37.3,
+Koi 0.5.5, Guava 33.3.1-android, and the Jetpack, Kotlin and Hilt runtime families.
+Settings exposes the bundled notices offline, including the resolved jsoup MIT,
+Jakarta Inject notice and AndroidX DataStore Protobuf BSD text. The APK retains
+the original packaged notices under `META-INF` where the artifacts supply them.
+
+The tagged PDFiumAndroid 1.9.8 source contains the prebuilt `libpdfium.cr.so`
+files. It does not identify the exact upstream PDFium revision or provide the
+complete native third-party inventory. That provenance and the native security
+and notice review are pending for public distribution. [PdfiumAndroid 1.9.8 source](https://github.com/marain87/PdfiumAndroid/tree/1.9.8)

@@ -12,6 +12,7 @@ enum class ImportProblem {
     FILE_TOO_LARGE,
     INSUFFICIENT_STORAGE,
     UNREADABLE_CONTENT,
+    STORAGE_WRITE_FAILED,
     RESOURCE_LIMIT,
 }
 
@@ -27,6 +28,7 @@ class PublicationImportException(
         ImportProblem.FILE_TOO_LARGE -> "This book exceeds the import size limit."
         ImportProblem.INSUFFICIENT_STORAGE -> "There is not enough free storage to import this book. Free some space and try again."
         ImportProblem.UNREADABLE_CONTENT -> "This file could not be read. Select it again and try importing it."
+        ImportProblem.STORAGE_WRITE_FAILED -> "Leaf could not save the imported copy. Check free storage and try again."
         ImportProblem.RESOURCE_LIMIT -> "This EPUB contains a resource that is too large to open safely. Try a smaller or less complex copy."
     },
     cause,
@@ -70,17 +72,22 @@ object BoundedFileCopier {
                 if (available < reserveBytes || available - reserveBytes < count.toLong()) {
                     throw PublicationImportException(ImportProblem.INSUFFICIENT_STORAGE)
                 }
-                output.write(buffer, 0, count)
+                writeOutput { output.write(buffer, 0, count) }
                 digest.update(buffer, 0, count)
                 total += count
             }
             if (total == 0L) throw PublicationImportException(ImportProblem.EMPTY_FILE)
-            output.flush()
+            writeOutput { output.flush() }
         } catch (error: PublicationImportException) {
             throw error
         } catch (error: IOException) {
             throw PublicationImportException(ImportProblem.UNREADABLE_CONTENT, error)
         }
         return CopyResult(total, digest.digest().joinToString("") { "%02x".format(it) })
+    }
+
+    private inline fun writeOutput(action: () -> Unit) {
+        try { action() }
+        catch (failure: IOException) { throw PublicationImportException(ImportProblem.STORAGE_WRITE_FAILED, failure) }
     }
 }

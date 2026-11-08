@@ -340,6 +340,28 @@ class BookImportIntegrationTest {
         assertEquals(0, cleanup.await())
     }
 
+    @Test fun aValidRecoveredCopyReturnsToTheLibraryAndADamagedCopyIsPreserved() = runBlocking {
+        val original = source("standard.epub").second
+        val managed = File(privateContext.filesDir, "books").apply { check(isDirectory || mkdirs()) }
+        original.copyTo(File(managed, "${UUID.randomUUID()}.epub"))
+        File(managed, "${UUID.randomUUID()}.pdf").writeText("damaged fixture")
+        assertEquals(2, importer.recoverManagedFiles().quarantinedBooks)
+        val copies = importer.recoveredBooks()
+        val epub = copies.single { it.format == PublicationFormat.EPUB }
+        val damaged = copies.single { it.format == PublicationFormat.PDF }
+
+        assertTrue(importer.restoreRecoveredBook(epub.token))
+        val restored = books.books.first().single()
+        assertEquals(sha256(original), sha256(File(restored.storagePath)))
+        assertNull(restored.sourceUri)
+        assertTrue(original.isFile)
+        assertTrue(failure { importer.restoreRecoveredBook(damaged.token) } is PublicationImportException)
+        assertEquals(listOf(damaged), importer.recoveredBooks())
+        assertEquals("damaged fixture", File(privateContext.filesDir, "recovery/books/${damaged.token}").readText())
+        assertEquals(listOf(restored.id), books.books.first().map { it.id })
+        assertTrue(temporaryFiles().isEmpty())
+    }
+
     private fun newDatabase(): LeafDatabase = Room.databaseBuilder(target, LeafDatabase::class.java, File(testRoot, "library.db").absolutePath).build()
     private fun temporaryFiles(): List<File> = File(privateContext.filesDir, "cache/temporary-imports").listFiles().orEmpty().toList()
     private fun uri(file: File): Uri = FileProvider.getUriForFile(target, "${target.packageName}.fixtures", file)

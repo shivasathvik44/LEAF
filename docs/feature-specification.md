@@ -93,11 +93,17 @@ compaction and large-history performance remain release checks.
 
 ## Settings and privacy
 
-Settings persist via DataStore: app theme/accent, default reader appearance,
-library sorting and layout. Storage includes managed usage and safe cache cleanup.
-About includes version and third-party notices; a repository link requires the
-owner's actual GitHub URL. There are no accounts, ads, analytics, broad storage
-permissions, runtime network access or automatic cloud backup of private data.
+Settings persist app theme and accent, reader defaults, library sorting and
+layout in DataStore. Per-book appearance takes precedence over reader defaults.
+Storage displays private book, cover and recovery usage. Cache cleanup removes
+only Leaf-owned temporary import files under the shared import lock.
+
+Settings lists quarantined EPUB and PDF copies. Restoring one uses the standard
+validation, hashing and duplicate detection path. A successful restore consumes
+the private recovery copy once the managed book is available. Validation and
+storage failures preserve the recovery copy for retry. About shows the app
+version and bundled notices and can open the repository in the user's browser.
+Leaf keeps its library, annotations and reading history on the device.
 
 ## Explicitly deferred
 

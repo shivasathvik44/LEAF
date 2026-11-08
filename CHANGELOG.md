@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — reliability and Settings
+
+- Added Settings for app appearance, reader defaults, library preferences,
+  private storage, privacy information and bundled open-source notices.
+- Added recovery of interrupted imports from Settings. Leaf validates the copy
+  through the normal import path and consumes it after a successful restore.
+  Damaged copies remain available in private recovery storage.
+- Added a storage-specific error for output failures during import and regression
+  tests for recovery and Settings persistence.
+
 ## Unreleased — shelves and reading activity, verified locally 2026-11-06
 
 - Added custom shelves with descriptions, cover collages, book counts, editing,

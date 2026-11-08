@@ -13,6 +13,7 @@ import android.text.StaticLayout
 import android.text.TextPaint
 import com.leaf.reader.core.util.*
 import com.leaf.reader.data.local.files.ManagedBookFiles
+import com.leaf.reader.data.local.files.RecoveredBookCopy
 import com.leaf.reader.data.local.files.StorageRecoveryReport
 import com.leaf.reader.data.readium.PublicationAccessException
 import com.leaf.reader.data.readium.PublicationRepository
@@ -66,8 +67,23 @@ class BookImportRepository @Inject constructor(
     suspend fun storageUsageBytes(): Long = safeImport { files.storageUsageBytes() }
     suspend fun clearTemporaryCache(): Int = safeImport { files.clearTemporaryCache() }
 
-    private suspend fun ManagedBookFiles.importLocked(uri: Uri): ImportResult {
-        val document = documentInfo(uri)
+    suspend fun recoveredBooks(): List<RecoveredBookCopy> = safeImport {
+        withContext(Dispatchers.IO) { files.exclusive { recoveredBooksLocked() } }
+    }
+
+    /** The source is consumed only after validated bytes are available in the library. */
+    suspend fun restoreRecoveredBook(token: String): Boolean = safeImport {
+        withContext(Dispatchers.IO) {
+            files.exclusive {
+                val source = recoveredBookFileLocked(token) ?: throw PublicationImportException(ImportProblem.UNREADABLE_CONTENT)
+                importLocked(Uri.fromFile(source), DocumentInfo("Recovered book.${source.extension}", source.length()))
+                source.delete()
+            }
+        }
+    }
+
+    private suspend fun ManagedBookFiles.importLocked(uri: Uri, recovered: DocumentInfo? = null): ImportResult {
+        val document = recovered ?: documentInfo(uri)
         val format = PublicationValidation.formatFor(document.name)
         if (document.size != null && document.size > BoundedFileCopier.DEFAULT_MAX_BYTES) throw PublicationImportException(ImportProblem.FILE_TOO_LARGE)
         var temporary: File? = null
@@ -121,7 +137,7 @@ class BookImportRepository @Inject constructor(
             coverTemporary?.let { committedCover = commitCover(it, id); coverTemporary = null }
             if (existing == null) {
                 books.add(Book(id, metadata.title, metadata.author, metadata.description, format,
-                    checkNotNull(committedBook).absolutePath, uri.toString(), committedCover?.absolutePath,
+                    checkNotNull(committedBook).absolutePath, uri.takeIf { recovered == null }?.toString(), committedCover?.absolutePath,
                     copied.byteCount, copied.sha256, System.currentTimeMillis()))
             }
             // The existing row, locator and annotations survive restoration unchanged.

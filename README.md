@@ -10,7 +10,8 @@ Library and import, the reader, EPUB annotations and search, custom shelves,
 and foreground reading activity have passed local checks on API 24 and API 35.
 The reader supports reflowable EPUB text selection, colored highlights, notes,
 and contextual EPUB search. Fixed-layout EPUB text selection and PDF highlighting/search
-are unsupported. OS process death and the wider device matrix are release checks.
+are unsupported. Settings provides reader defaults, private storage recovery and
+offline access to bundled licenses.
 
 ## Build
 
@@ -50,7 +51,10 @@ Do not attach personal ebooks, private notes, database files, credentials, or si
 
 ## Release signing
 
-A public release requires the owner's signing credentials, supplied outside version control. No signing key is generated or bundled by the project. Debug APKs are for development and must not be described as signed production releases.
+Run `./gradlew :app:assembleRelease :app:lintRelease` to build and check the
+minified release candidate. The unsigned APK is written to
+`app/build/outputs/apk/release/app-release-unsigned.apk`. A public release
+requires the owner's signing credentials, supplied outside version control.
 
 ## License
 

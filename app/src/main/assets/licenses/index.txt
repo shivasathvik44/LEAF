@@ -1,8 +1,19 @@
-Leaf third-party notices — initial source inventory
+Leaf third-party notices
 
-These notices preserve upstream licenses for selected reader components.
-They are not a completed inventory of every resolved application dependency.
-Leaf's original code is MIT licensed; third-party assets retain their own terms.
+Leaf's original code is MIT licensed. Third-party components retain their own terms.
+
+Leaf-MIT.txt
+  Original Leaf code. See LICENSE in the source repository.
+
+jsoup-MIT.txt
+  jsoup 1.23.2. Copied from META-INF/jsoup/LICENSE in the resolved artifact.
+
+Jakarta-Inject-NOTICE.txt
+  Eclipse Jakarta Dependency Injection 2.0.1. Retained from its packaged NOTICE.
+
+DataStore-Protobuf-BSD.txt
+  Protobuf runtime bundled by AndroidX DataStore Preferences 1.2.1.
+  Retained from the artifact's datastore-preferences-external-protobuf LICENSE.
 
 Readium-BSD-3-Clause.txt
   Readium Kotlin Toolkit 3.4.0
@@ -33,6 +44,13 @@ PdfiumAndroid-LICENSE.txt
   Source: https://github.com/marain87/PdfiumAndroid/blob/1.9.8/LICENSE
 
 The full Apache-2.0 license appears in AndroidPdfViewer-Apache-2.0.txt and
-PhotoView-Apache-2.0.txt. The PDFium wrapper's notice refers to this license.
+PhotoView-Apache-2.0.txt. It also applies to the AndroidX and Compose libraries,
+Kotlin and Kotlinx libraries, Hilt and Dagger, Coil, Okio, Guava, Accompanist,
+Koi, Timber, Javax Inject, Jakarta Inject, JSR-305, JSpecify, JetBrains annotations,
+and Android's core library desugaring runtime. Some artifacts also supply their
+own notices in the APK's META-INF directory.
+
+The PDFium wrapper's notice refers to Apache-2.0. Its PDFium binary has a
+separate BSD-style notice in PdfiumAndroid-LICENSE.txt.
 Additional PDFium native third-party notices must be reconciled with the exact
 resolved binaries before public release. See docs/dependencies.md in the source.

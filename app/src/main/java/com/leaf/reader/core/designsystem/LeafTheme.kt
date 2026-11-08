@@ -5,6 +5,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 
 @Composable
 fun LeafTheme(dark: Boolean = true, accent: Color = Color(0xFFA5C7A7), content: @Composable () -> Unit) {
@@ -13,7 +14,7 @@ fun LeafTheme(dark: Boolean = true, accent: Color = Color(0xFFA5C7A7), content: 
         background = Color(0xFF111512), surface = Color(0xFF171D18),
         surfaceVariant = Color(0xFF263029), onBackground = Color(0xFFE5E8DD),
         onSurface = Color(0xFFE5E8DD), secondary = Color(0xFFC4CABA)
-    ) else lightColorScheme(primary = Color(0xFF3A6845), primaryContainer = accent,
+    ) else lightColorScheme(primary = lerp(Color(0xFF19291B), accent, 0.35f), primaryContainer = accent,
         onPrimaryContainer = Color(0xFF15371E), background = Color(0xFFFAFBF4), surface = Color(0xFFF5F7EF))
     MaterialTheme(colorScheme = colors, content = content)
 }

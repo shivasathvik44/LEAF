@@ -7,13 +7,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.*
 import com.leaf.reader.feature.bookdetails.BookDetailsScreen
 import com.leaf.reader.feature.library.LibraryScreen
 import com.leaf.reader.feature.library.LibraryViewModel
 import com.leaf.reader.feature.reader.ReaderScreen
+import com.leaf.reader.feature.settings.SettingsScreen
 import com.leaf.reader.feature.shelves.ShelvesScreen
 import com.leaf.reader.feature.statistics.StatisticsScreen
 import com.leaf.reader.core.ui.ReadingActivityNoticeViewModel
@@ -74,17 +74,9 @@ fun LeafApp(model: LibraryViewModel, activityNotices: ReadingActivityNoticeViewM
             composable("Activity") {
                 StatisticsScreen(onBook = { nav.navigate("book/$it") })
             }
-            listOf("Settings").forEach { destination ->
-                composable(destination) {
-                    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(destination, style = MaterialTheme.typography.headlineLarge)
-                        Text(when (destination) {
-                            "Shelves" -> "Make room for your next good read."
-                            "Activity" -> "Every quiet minute counts."
-                            else -> "Private by design. Your books stay on this device."
-                        }, style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
+            composable("Settings") {
+                val preferences by model.preferences.collectAsStateWithLifecycle()
+                SettingsScreen(preferences, model::updatePreferences)
             }
         }
     }

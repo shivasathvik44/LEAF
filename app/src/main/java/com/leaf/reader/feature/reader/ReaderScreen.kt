@@ -50,6 +50,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.leaf.reader.core.util.PublicationFormat
+import com.leaf.reader.core.ui.PreferenceSlider
 import com.leaf.reader.core.ui.ReaderInteractionHost
 import com.leaf.reader.core.ui.ReadingActivityEligibilityEffect
 import com.leaf.reader.data.readium.ReaderHostFragment
@@ -339,15 +340,15 @@ private fun ReaderAppearance(preferences: ReaderPreferences, format: Publication
         }
         if (supportsTypography) {
             Text("Font size · ${preferences.fontSize.roundToInt()}%")
-            SettingSlider("Font size", preferences.fontSize, 50.0..300.0) { onChange(preferences.copy(fontSize = it)) }
+            PreferenceSlider("Font size", preferences.fontSize, 50.0..300.0) { onChange(preferences.copy(fontSize = it)) }
             Text("Font family")
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("serif", "sans-serif", "monospace").forEach { family -> FilterChip(selected = preferences.fontFamily == family, onClick = { onChange(preferences.copy(fontFamily = family)) }, label = { Text(when (family) { "sans-serif" -> "Sans"; "monospace" -> "Mono"; else -> "Serif" }) }) }
             }
             Text("Line spacing · ${"%.1f".format(preferences.lineSpacing)}")
-            SettingSlider("Line spacing", preferences.lineSpacing, 0.8..3.0) { onChange(preferences.copy(lineSpacing = it)) }
+            PreferenceSlider("Line spacing", preferences.lineSpacing, 0.8..3.0) { onChange(preferences.copy(lineSpacing = it)) }
             Text("Margins")
-            SettingSlider("Margins", preferences.margins, 0.0..3.0) { onChange(preferences.copy(margins = it)) }
+            PreferenceSlider("Margins", preferences.margins, 0.0..3.0) { onChange(preferences.copy(margins = it)) }
         } else if (format == PublicationFormat.PDF) {
             Text("PDF pages retain their original colors and typography. Theme changes affect reader controls.")
         } else {
@@ -359,12 +360,6 @@ private fun ReaderAppearance(preferences: ReaderPreferences, format: Publication
         }
         TextButton(onClick = onReset) { Text("Reset to reading defaults") }
     }
-}
-
-@Composable
-private fun SettingSlider(label: String, value: Double, range: ClosedFloatingPointRange<Double>, onChange: (Double) -> Unit) {
-    var draft by remember(value) { mutableFloatStateOf(value.toFloat()) }
-    Slider(value = draft, onValueChange = { draft = it }, onValueChangeFinished = { onChange(draft.toDouble()) }, valueRange = range.start.toFloat()..range.endInclusive.toFloat(), modifier = Modifier.semantics { contentDescription = label })
 }
 
 private tailrec fun Context.fragmentActivity(): FragmentActivity = when (this) {
