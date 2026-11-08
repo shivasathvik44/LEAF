@@ -9,6 +9,7 @@
   Damaged copies remain available in private recovery storage.
 - Added a storage-specific error for output failures during import and regression
   tests for recovery and Settings persistence.
+- Removed the unused Media3 Bluetooth validation activity from the merged manifest.
 
 ## Unreleased — shelves and reading activity, verified locally 2026-11-06
 

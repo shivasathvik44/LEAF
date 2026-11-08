@@ -32,6 +32,17 @@ alone does not verify rendering, annotation restoration, or daily usability.
 - [ ] Phase 5: reliability, migrations, accessibility, security/license review,
   documentation, tests, CI and installable release artifact verified.
 
+### Phase 5 local reliability — 2026-11-09
+
+- [x] Settings persist reader and library defaults and expose bundled notices.
+- [x] Private recovery restores valid interrupted copies and retains damaged copies.
+- [x] API 24 and API 35 passed the local device gate. The existing GitHub Actions
+  workflow supplies the hosted checks for the branch once a PR is opened.
+- [x] Android Recents restored the same EPUB chapter in a new process offline.
+- [x] Room version 1 data reopens intact and unsupported downgrades fail safely.
+- [x] Minified APK, packaged privacy checks and 16 KB Android 17 reader checks passed.
+- [ ] Complete the public release gates in the [testing notes](testing.md).
+
 ### Phase 4 implementation — verified locally, 2026-11-06
 
 - Preserve the existing Room schema and all prior import, reader and annotation behavior.

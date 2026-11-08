@@ -12,6 +12,11 @@
         android:supportsRtl="true"
         android:usesCleartextTraffic="false"
         android:theme="@style/Theme.Leaf">
+        <!-- A merge removal for a runtime-only Media3 class, which lint cannot resolve here. -->
+        <activity
+            android:name="androidx.media3.session.BluetoothValidationActivity"
+            tools:node="remove"
+            tools:ignore="MissingClass" />
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

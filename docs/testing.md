@@ -158,6 +158,58 @@ and `actionlint` passed. GitHub Actions verification is pending for the local
 fixes. Local logs are retained in the ignored `.leaf-tools/verification/`
 directory as `ci-api24-full-lifecycle-fix.log` and `ci-api35-full-lifecycle-fix.log`.
 
+### Offline process restoration — 2026-11-09
+
+On the API 35 Google APIs emulator, Leaf imported the CC0 standard EPUB through
+Android's document picker. With airplane mode enabled, it rendered chapter 3
+and saved `OEBPS/chapter3.xhtml` in Room. After sending the Activity home and
+killing its background process with `adb shell am kill com.leaf.reader`, the
+original PID exited. Selecting the existing task in Android Recents launched a
+new process and rendered the same chapter in the live WebView.
+
+The file-backed Room tests reopen the exported version 1 schema and exercise
+rejection of an unsupported downgrade. The recovery test moves a valid orphan
+and a damaged copy into private recovery storage. It verifies that the valid
+copy returns to the library with matching bytes and that the damaged copy is
+retained after validation fails.
+
+### Phase 5 workflow checks — 2026-11-09
+
+The commands in `.github/workflows/android-ci.yml` built the debug APK and test
+APK with JDK 17. All 81 JVM tests and 84 instrumentation tests passed. The full
+device suites ran on API 24 and API 35 Google APIs x86_64 emulators. The revised
+Settings case passed on API 35 after the full run and as part of the final API 24
+run. Debug lint had zero errors and 19 warnings. `actionlint` passed. The hosted
+workflow still needs to run for this branch.
+
+### Phase 5 release candidate — 2026-11-09
+
+The minified `:app:assembleRelease` build and `:app:lintRelease` both passed.
+Release lint had zero errors and 19 warnings. The unsigned APK is at
+`app/build/outputs/apk/release/app-release-unsigned.apk` with SHA-256
+`6cf1c55dd67264f89843dbc3422d91aeec2aa15762d270011e1289f53d4ce7af`.
+
+The packaged manifest disables backups, references both exclusion rule files,
+and requests only `WAKE_LOCK` and Leaf's signature-scoped receiver permission.
+It omits the unused Media3 Bluetooth activity and the debug test harness and
+fixture provider. The launcher and the `DUMP`-protected profile installer
+receiver are the exported components. A lint exception on the Bluetooth merge
+removal accounts for Media3's runtime-only class. The APK audit checks that the
+activity is absent from the packaged manifest.
+
+`zipalign -c -P 16 4` passed, and all packaged `arm64-v8a` and `x86_64` native
+libraries passed the 16 KB ELF segment checks. On a Google APIs Android 17
+x86_64 emulator, `getconf PAGE_SIZE` returned `16384`. All 27 selected reader,
+import, recovery and Settings tests passed in airplane mode, including native
+ordinary and scanned PDF rendering. A development-signed copy of the minified
+APK also imported the CC0 PDF through the system picker and rendered page 2
+offline. Settings labels were checked visually at 150% font scale. The sampled
+application log contained no crash, fixture text or private publication path.
+
+Public distribution still requires the owner's signing key, a hosted workflow
+run for this branch, a full accessibility review and reconciliation of the
+[native PDFium provenance and notices](dependencies.md#phase-5-resolved-artifact-review).
+
 ## Commands
 
 Run from the repository root with JDK 17 and the configured Android SDK installed:
