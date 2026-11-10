@@ -36,12 +36,27 @@ class LibraryPickerTest {
         instrumentation.addMonitor(monitor)
         try {
             compose.onNodeWithTag("import-books").assertIsDisplayed().assertIsEnabled().performClick()
-            compose.waitUntil(timeoutMillis = 25_000) {
-                monitor.hits > 0 && systemDocumentsVisible(instrumentation)
+            try {
+                compose.waitUntil(timeoutMillis = 25_000) {
+                    monitor.hits > 0 && systemDocumentsVisible(instrumentation)
+                }
+            } catch (failure: Throwable) {
+                throw AssertionError(
+                    "System document picker did not open cleanly (hits=${monitor.hits}, " +
+                        "activeWindow=${activeWindowPackage(instrumentation)})",
+                    failure,
+                )
             }
             assertEquals("One tap must launch one document request", 1, monitor.hits)
             assertTrue(instrumentation.uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK))
-            compose.waitUntil(timeoutMillis = 25_000) { !systemDocumentsVisible(instrumentation) }
+            try {
+                compose.waitUntil(timeoutMillis = 25_000) { !systemDocumentsVisible(instrumentation) }
+            } catch (failure: Throwable) {
+                throw AssertionError(
+                    "System document picker did not close cleanly (activeWindow=${activeWindowPackage(instrumentation)})",
+                    failure,
+                )
+            }
             compose.waitForIdle()
             compose.onNodeWithText("Leaf").assertIsDisplayed()
             compose.onNodeWithTag("import-books").assertIsEnabled()
@@ -52,10 +67,7 @@ class LibraryPickerTest {
             val targetPackage = instrumentation.targetContext.packageName
             val deadline = SystemClock.uptimeMillis() + 10_000L
             while (SystemClock.uptimeMillis() < deadline) {
-                val root = instrumentation.uiAutomation.rootInActiveWindow
-                val activePackage = root?.packageName?.toString()
-                root?.recycle()
-                if (activePackage == targetPackage) break
+                if (activeWindowPackage(instrumentation) == targetPackage) break
                 instrumentation.uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
                 SystemClock.sleep(500)
             }
@@ -63,10 +75,14 @@ class LibraryPickerTest {
     }
 
     @Suppress("DEPRECATION")
-    private fun systemDocumentsVisible(instrumentation: Instrumentation): Boolean {
-        val root = instrumentation.uiAutomation.rootInActiveWindow ?: return false
+    private fun systemDocumentsVisible(instrumentation: Instrumentation): Boolean =
+        activeWindowPackage(instrumentation).orEmpty().endsWith(".documentsui")
+
+    @Suppress("DEPRECATION")
+    private fun activeWindowPackage(instrumentation: Instrumentation): String? {
+        val root = instrumentation.uiAutomation.rootInActiveWindow ?: return null
         return try {
-            root.packageName?.toString().orEmpty().endsWith(".documentsui")
+            root.packageName?.toString()
         } finally {
             root.recycle()
         }

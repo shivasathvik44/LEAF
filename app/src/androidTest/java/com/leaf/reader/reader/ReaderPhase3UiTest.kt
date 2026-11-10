@@ -217,14 +217,16 @@ class ReaderPhase3UiTest {
     @Test fun readerSearchShowsEmptyStateContextAndNavigatesToLastResult() = runBlocking<Unit> {
         openReaderPanel("Search this book")
         compose.onNodeWithTag("reader-search-query").performTextReplacement("absent-$id")
-        compose.onNodeWithText("Search", substring = false).performClick()
+        closeSoftKeyboard()
+        compose.onNodeWithText("Search", substring = false).assertIsEnabled().performClick()
         compose.waitUntil(15_000) {
             compose.onAllNodesWithText("No matching passages. Try another phrase.")
                 .fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithText("No matching passages. Try another phrase.").assertIsDisplayed()
         compose.onNodeWithTag("reader-search-query").performTextReplacement("silver fern")
-        compose.onNodeWithText("Search", substring = false).performClick()
+        closeSoftKeyboard()
+        compose.onNodeWithText("Search", substring = false).assertIsEnabled().performClick()
         awaitState { it.searchStarted && !it.searchRunning && it.searchResults.size == 3 }
         assertNull(requireNotNull(model).state.value.searchError)
         val results = requireNotNull(model).state.value.searchResults

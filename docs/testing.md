@@ -210,6 +210,33 @@ Public distribution still requires the owner's signing key, a hosted workflow
 run for this branch, a full accessibility review and reconciliation of the
 [native PDFium provenance and notices](dependencies.md#phase-5-resolved-artifact-review).
 
+### CI hardening and timeout diagnostics — 2026-11-10
+
+To resolve the GitHub Actions API 24 timeout and improve failure visibility in
+[`.github/workflows/android-ci.yml`](../.github/workflows/android-ci.yml):
+
+- `.github/workflows/android-ci.yml` polls `sys.boot_completed=1`, dispatches
+  wakeup/keyguard/immersive/background-ANR settings before tests, streams live
+  `test-results.log` progress every 10 seconds, enforces
+  `-Pandroid.testInstrumentationRunnerArguments.timeout_msec=180000` per test,
+  guards `:app:connectedDebugAndroidTest` with an inner `timeout -k 30s 22m`
+  (stdin detached via `< /dev/null` so GNU `timeout`'s background process group
+  never stalls Gradle client exit), and captures `test-results.log`, latest test
+  logcat, focused window, top activity, and device logcat on non-zero exit.
+- `SettingsUiTest`, `ReaderPhase3UiTest`, and `LibraryPickerTest` stabilize
+  seeded Settings radio assertions (`isDialog()` + `SemanticsActions.OnClick` +
+  DataStore state synchronization), close the IME before clicking search buttons
+  in `ReaderSearchPanel`, and include active-window package diagnostics on
+  picker timeouts.
+
+Local verification with JDK 17 after these edits: `actionlint` passed, all 81
+JVM unit tests passed, debug lint reported 0 errors and 19 warnings, and
+all **84 instrumentation tests passed (`0` failed, `0` errors, `0` skipped)** on
+both `leaf-ci-api24` (`111.738s` suite / `2m 16s` Gradle) and `leaf-ci-api35`
+(`131.836s` suite / `2m 38s` Gradle) using emulator 36.1.9 with `-gpu host
+-feature -Vulkan` and `timeout_msec=180000`. Hosted GitHub Actions
+verification still awaits pushing the branch and observing the CI run.
+
 ## Commands
 
 Run from the repository root with JDK 17 and the configured Android SDK installed:
@@ -255,9 +282,11 @@ Both Android CI jobs use the SDK setup action to install `platform-tools`,
 `platforms;android-37.0` and `build-tools;37.0.0`. The build job runs JVM unit
 tests and lint and uploads the debug APK when its checks pass. The device jobs
 run the full instrumentation suite on Google APIs x86_64 images for API 24 and
-35, with a 35-minute limit on emulator setup and test execution. Reports are
-retained even when a check fails. GitHub Actions must pass before CI can be
-reported as verified. API 37 and 16 KB page-size validation are separate release
-checks.
+35, with `-Pandroid.testInstrumentationRunnerArguments.timeout_msec=180000`,
+an inner 22-minute `timeout` watchdog around `:app:connectedDebugAndroidTest`
+(with live 10s progress output and ADB failure diagnostics), and a 35-minute
+step limit on emulator setup and test execution. Reports are retained even when
+a check fails. GitHub Actions must pass before CI can be reported as verified.
+API 37 and 16 KB page-size validation are separate release checks.
 
 Before release, repeat the full fixture and device matrix, inspect the merged release manifest and dependency licenses, verify signing with owner-supplied credentials, and record the APK checksum and output path. An unsigned release artifact or debug-signed APK is not a production signed release.
