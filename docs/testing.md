@@ -210,32 +210,11 @@ Public distribution still requires the owner's signing key, a hosted workflow
 run for this branch, a full accessibility review and reconciliation of the
 [native PDFium provenance and notices](dependencies.md#phase-5-resolved-artifact-review).
 
-### CI hardening and timeout diagnostics — 2026-11-10
+### CI hardening and timeout diagnostics — updated 2026-11-10
 
-To resolve the GitHub Actions API 24 timeout and improve failure visibility in
-[`.github/workflows/android-ci.yml`](../.github/workflows/android-ci.yml):
+The initial CI harness inlined in `android-ci.yml` failed under `reactivecircus/android-emulator-runner@v2` because `parseScript()` splits multi-line `script:` blocks on every newline and executes each line as a separate `sh -c` subprocess, causing control-flow lines (`for`, `if`, multi-line functions) to fail immediately with shell syntax errors (exit code 2).
 
-- `.github/workflows/android-ci.yml` polls `sys.boot_completed=1`, dispatches
-  wakeup/keyguard/immersive/background-ANR settings before tests, streams live
-  `test-results.log` progress every 10 seconds, enforces
-  `-Pandroid.testInstrumentationRunnerArguments.timeout_msec=180000` per test,
-  guards `:app:connectedDebugAndroidTest` with an inner `timeout -k 30s 22m`
-  (stdin detached via `< /dev/null` so GNU `timeout`'s background process group
-  never stalls Gradle client exit), and captures `test-results.log`, latest test
-  logcat, focused window, top activity, and device logcat on non-zero exit.
-- `SettingsUiTest`, `ReaderPhase3UiTest`, and `LibraryPickerTest` stabilize
-  seeded Settings radio assertions (`isDialog()` + `SemanticsActions.OnClick` +
-  DataStore state synchronization), close the IME before clicking search buttons
-  in `ReaderSearchPanel`, and include active-window package diagnostics on
-  picker timeouts.
-
-Local verification with JDK 17 after these edits: `actionlint` passed, all 81
-JVM unit tests passed, debug lint reported 0 errors and 19 warnings, and
-all **84 instrumentation tests passed (`0` failed, `0` errors, `0` skipped)** on
-both `leaf-ci-api24` (`111.738s` suite / `2m 16s` Gradle) and `leaf-ci-api35`
-(`131.836s` suite / `2m 38s` Gradle) using emulator 36.1.9 with `-gpu host
--feature -Vulkan` and `timeout_msec=180000`. Hosted GitHub Actions
-verification still awaits pushing the branch and observing the CI run.
+The entire instrumentation harness—including boot-ready polling, live progress monitoring, `timeout` watchdog, and failure-diagnostic logic—was moved into `.github/scripts/run-instrumentation-ci.sh`. The CI workflow now executes this script as a single line, ensuring shell integrity. All 84 instrumentation tests pass on both API 24 and API 35 with the new harness, and hosted CI verification is pending.
 
 ## Commands
 
