@@ -29,7 +29,10 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
-    testOptions { unitTests.isIncludeAndroidResources = true }
+    testOptions {
+        execution = "ANDROIDX_TEST_ORCHESTRATOR"
+        unitTests.isIncludeAndroidResources = true
+    }
     sourceSets["androidTest"].assets.directories.add("$projectDir/schemas")
     lint { abortOnError = true; checkReleaseBuilds = true }
     packaging { resources.excludes += setOf("META-INF/AL2.0", "META-INF/LGPL2.1") }
@@ -70,6 +73,7 @@ dependencies {
     androidTestImplementation(libs.androidx.test.espresso)
     androidTestImplementation(libs.compose.test)
     androidTestImplementation(libs.room.testing)
+    androidTestUtil(libs.androidx.test.orchestrator)
     debugImplementation(libs.compose.tooling)
     debugImplementation(libs.compose.test.manifest)
 }

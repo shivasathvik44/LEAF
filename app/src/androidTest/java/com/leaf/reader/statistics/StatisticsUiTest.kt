@@ -47,12 +47,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
+import org.junit.rules.Timeout
 import org.junit.runner.RunWith
 
 /** Production MainActivity, Hilt ViewModel and Room; every case owns only its UUID books. */
 @RunWith(AndroidJUnit4::class)
 class StatisticsUiTest {
-    @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+    val compose = createAndroidComposeRule<MainActivity>()
+    @get:Rule val rules: RuleChain = RuleChain.outerRule(Timeout.seconds(180)).around(compose)
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val context get() = instrumentation.targetContext
     private val dependencies get() = EntryPointAccessors.fromApplication(
@@ -84,9 +87,12 @@ class StatisticsUiTest {
 
     @After fun tearDown() = runBlocking<Unit> {
         // Stop the real screen's subscription/ticker before removing only this case's records.
-        compose.activityRule.scenario.close()
-        ownedBooks.forEach { dependencies.books().removeRecord(it.id) }
-        if (this@StatisticsUiTest::directory.isInitialized) directory.deleteRecursively()
+        try {
+            compose.activityRule.scenario.close()
+        } finally {
+            ownedBooks.forEach { dependencies.books().removeRecord(it.id) }
+            if (this@StatisticsUiTest::directory.isInitialized) directory.deleteRecursively()
+        }
     }
 
     @Test fun calendarFiltersRealHistoryAndRestoresItsSelectionAcrossRecreation() = runBlocking<Unit> {

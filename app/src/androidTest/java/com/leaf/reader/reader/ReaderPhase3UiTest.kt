@@ -72,6 +72,8 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
+import org.junit.rules.Timeout
 import org.junit.runner.RunWith
 
 /**
@@ -81,7 +83,8 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class ReaderPhase3UiTest {
-    @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+    val compose = createAndroidComposeRule<MainActivity>()
+    @get:Rule val rules: RuleChain = RuleChain.outerRule(Timeout.seconds(180)).around(compose)
 
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val context get() = instrumentation.targetContext
@@ -113,7 +116,7 @@ class ReaderPhase3UiTest {
             System.currentTimeMillis()))
         dependencies.preferences().resetReaderPrefs(id)
         compose.onNodeWithText("Search your library").performTextReplacement(title)
-        closeSoftKeyboard()
+        dismissKeyboard()
         val bookCard = hasText(title) and hasClickAction() and !hasSetTextAction()
         compose.waitUntil(15_000) {
             compose.onAllNodes(bookCard).fetchSemanticsNodes().size == 1
@@ -130,10 +133,13 @@ class ReaderPhase3UiTest {
 
     @After fun tearDown() = runBlocking<Unit> {
         try {
-            dropTrigger()
+            try {
+                dropTrigger()
+            } finally {
+                compose.activityRule.scenario.onActivity { model?.closeReader() }
+                compose.activityRule.scenario.close()
+            }
         } finally {
-            compose.activityRule.scenario.onActivity { model?.closeReader() }
-            compose.activityRule.scenario.close()
             if (this@ReaderPhase3UiTest::id.isInitialized) {
                 dependencies.preferences().resetReaderPrefs(id)
                 dependencies.books().removeRecord(id)
@@ -217,7 +223,7 @@ class ReaderPhase3UiTest {
     @Test fun readerSearchShowsEmptyStateContextAndNavigatesToLastResult() = runBlocking<Unit> {
         openReaderPanel("Search this book")
         compose.onNodeWithTag("reader-search-query").performTextReplacement("absent-$id")
-        closeSoftKeyboard()
+        dismissKeyboard()
         compose.onNodeWithText("Search", substring = false).assertIsEnabled().performClick()
         compose.waitUntil(15_000) {
             compose.onAllNodesWithText("No matching passages. Try another phrase.")
@@ -225,7 +231,7 @@ class ReaderPhase3UiTest {
         }
         compose.onNodeWithText("No matching passages. Try another phrase.").assertIsDisplayed()
         compose.onNodeWithTag("reader-search-query").performTextReplacement("silver fern")
-        closeSoftKeyboard()
+        dismissKeyboard()
         compose.onNodeWithText("Search", substring = false).assertIsEnabled().performClick()
         awaitState { it.searchStarted && !it.searchRunning && it.searchResults.size == 3 }
         assertNull(requireNotNull(model).state.value.searchError)
@@ -356,9 +362,19 @@ class ReaderPhase3UiTest {
     private fun saveEditor(color: String, note: String, expectSuccess: Boolean = true) {
         compose.onNodeWithText(color).performScrollTo().performClick().assertIsSelected()
         compose.onNodeWithTag("annotation-note").performScrollTo().performTextReplacement(note)
-        closeSoftKeyboard()
+        dismissKeyboard()
         compose.onNodeWithTag("annotation-save").assertIsEnabled().performClick()
         if (expectSuccess) awaitState { it.selection == null && it.editingHighlight == null && !it.annotationSaving }
+    }
+
+    private fun dismissKeyboard() {
+        compose.waitForIdle()
+        compose.activityRule.scenario.onActivity { activity ->
+            val imm = activity.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+            val token = activity.currentFocus?.windowToken ?: activity.window.decorView.windowToken
+            imm?.hideSoftInputFromWindow(token, 0)
+        }
+        closeSoftKeyboard()
     }
 
     private suspend fun awaitAnnotation(color: Long, note: String): Highlight = withTimeout(15_000) {

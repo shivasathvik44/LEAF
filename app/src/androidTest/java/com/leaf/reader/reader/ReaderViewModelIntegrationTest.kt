@@ -37,12 +37,16 @@ import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TestRule
+import org.junit.rules.Timeout
 import org.junit.runner.RunWith
 
 /** Real native navigator + production ViewModel + file-backed Room and DataStore. */
 @RunWith(AndroidJUnit4::class)
 class ReaderViewModelIntegrationTest {
+    @get:Rule val testTimeout: TestRule = Timeout.seconds(180)
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val context get() = instrumentation.targetContext
     private lateinit var directory: File

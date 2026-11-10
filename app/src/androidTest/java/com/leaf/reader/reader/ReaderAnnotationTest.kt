@@ -44,12 +44,16 @@ import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TestRule
+import org.junit.rules.Timeout
 import org.junit.runner.RunWith
 
 /** Native selection/decoration/search integration with real Room annotation persistence. */
 @RunWith(AndroidJUnit4::class)
 class ReaderAnnotationTest {
+    @get:Rule val testTimeout: TestRule = Timeout.seconds(180)
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val context get() = instrumentation.targetContext
     private val dependencies get() = EntryPointAccessors.fromApplication(context.applicationContext, ReaderHarnessDependencies::class.java)

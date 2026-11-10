@@ -45,12 +45,15 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
+import org.junit.rules.Timeout
 import org.junit.runner.RunWith
 
 /** Actual MainActivity + Hilt/Room flows; only UUID-scoped fixtures and shelves are removed. */
 @RunWith(AndroidJUnit4::class)
 class ShelvesUiTest {
-    @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+    val compose = createAndroidComposeRule<MainActivity>()
+    @get:Rule val rules: RuleChain = RuleChain.outerRule(Timeout.seconds(180)).around(compose)
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val context get() = instrumentation.targetContext
     private val database get() = EntryPointAccessors.fromApplication(context.applicationContext, ReaderUiDependencies::class.java).database()
@@ -84,9 +87,10 @@ class ShelvesUiTest {
     }
 
     @After fun tearDown() = runBlocking<Unit> {
-        try { dropTrigger() }
-        finally {
-            compose.activityRule.scenario.close()
+        try {
+            try { dropTrigger() }
+            finally { compose.activityRule.scenario.close() }
+        } finally {
             if (this@ShelvesUiTest::prefix.isInitialized) {
                 shelves.shelves.first().filter { it.name.startsWith(prefix) }.forEach { shelves.delete(it.id) }
             }
@@ -113,14 +117,14 @@ class ShelvesUiTest {
         // A clipboard-sized edit must never enter SavedStateHandle and break recreation.
         // Both rejected edits preserve the actual prior draft rather than shortening it.
         compose.onNodeWithTag("shelf-name").performTextReplacement("x".repeat(300_000))
-        closeSoftKeyboard()
+        dismissKeyboard()
         awaitEditorError("That name is too long. The new text was not added; use up to 100 characters.")
         assertEditorText("shelf-name", editedName)
         compose.onNodeWithTag("shelf-description").performTextReplacement("y".repeat(300_000))
-        closeSoftKeyboard()
+        dismissKeyboard()
         awaitEditorError("That description is too long. The new text was not added; use up to 2000 characters.")
         assertEditorText("shelf-description", editedDescription)
-        closeSoftKeyboard()
+        dismissKeyboard()
         compose.activityRule.scenario.recreate()
         assertEditorText("shelf-name", editedName)
         assertEditorText("shelf-description", editedDescription)
@@ -159,7 +163,7 @@ class ShelvesUiTest {
         val name = "$prefix From book"
         compose.onNodeWithTag("shelf-name").performTextReplacement(name)
         compose.onNodeWithTag("shelf-description").performTextReplacement("Created from book details")
-        closeSoftKeyboard()
+        dismissKeyboard()
         compose.onNodeWithTag("shelf-save").performClick()
         val created = awaitShelf { it.name == name && it.bookIds == listOf(bookId) }
         compose.onNodeWithTag("book-shelf-${created.id}").assertIsOn()
@@ -177,7 +181,7 @@ class ShelvesUiTest {
         val draft = "Keep this entered description 🌿"
         compose.onNodeWithTag("shelf-name").performTextReplacement(duplicate)
         compose.onNodeWithTag("shelf-description").performTextReplacement(draft)
-        closeSoftKeyboard()
+        dismissKeyboard()
         compose.onNodeWithTag("shelf-save").performClick()
         awaitEditorError("A shelf with that name already exists. Choose another name.")
         assertEditorText("shelf-name", duplicate)
@@ -185,7 +189,7 @@ class ShelvesUiTest {
 
         val retryName = "$prefix Retry"
         compose.onNodeWithTag("shelf-name").performTextReplacement(retryName)
-        closeSoftKeyboard()
+        dismissKeyboard()
         trigger = "leaf_shelf_ui_${token.replace("-", "") }"
         database.withTransaction {
             database.openHelper.writableDatabase.execSQL("""
@@ -223,11 +227,21 @@ class ShelvesUiTest {
         compose.onNodeWithText("New shelf").performClick()
         compose.onNodeWithTag("shelf-name").performTextReplacement(name)
         compose.onNodeWithTag("shelf-description").performTextReplacement(description)
-        closeSoftKeyboard()
+        dismissKeyboard()
         compose.onNodeWithTag("shelf-save").performClick()
         val shelf = awaitShelf { it.name == name && it.description == description }
         compose.waitUntil(15_000) { compose.onAllNodesWithTag("shelf-name").fetchSemanticsNodes().isEmpty() }
         return shelf
+    }
+
+    private fun dismissKeyboard() {
+        compose.waitForIdle()
+        compose.activityRule.scenario.onActivity { activity ->
+            val imm = activity.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+            val token = activity.currentFocus?.windowToken ?: activity.window.decorView.windowToken
+            imm?.hideSoftInputFromWindow(token, 0)
+        }
+        closeSoftKeyboard()
     }
 
     private suspend fun addOwnedBook(shelf: Shelf) {

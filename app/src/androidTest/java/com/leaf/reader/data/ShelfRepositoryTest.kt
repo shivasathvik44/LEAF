@@ -21,12 +21,16 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TestRule
+import org.junit.rules.Timeout
 import org.junit.runner.RunWith
 
 /** Every case owns a file-backed database and files; no app-library data is cleared. */
 @RunWith(AndroidJUnit4::class)
 class ShelfRepositoryTest {
+    @get:Rule val testTimeout: TestRule = Timeout.seconds(120)
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private lateinit var directory: File
     private lateinit var database: LeafDatabase

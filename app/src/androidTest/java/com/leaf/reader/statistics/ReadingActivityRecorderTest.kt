@@ -28,10 +28,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TestRule
+import org.junit.rules.Timeout
 
 /** Real Room writes and device-state services; no personal library database is opened. */
 class ReadingActivityRecorderTest {
+    @get:Rule val testTimeout: TestRule = Timeout.seconds(120)
     private lateinit var context: Context
     private lateinit var database: LeafDatabase
     private lateinit var repository: StatisticsRepository

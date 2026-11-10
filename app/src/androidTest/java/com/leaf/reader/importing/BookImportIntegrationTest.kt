@@ -32,7 +32,10 @@ import kotlinx.coroutines.flow.first
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TestRule
+import org.junit.rules.Timeout
 import org.junit.runner.RunWith
 import org.readium.r2.shared.publication.services.positions
 import org.readium.r2.shared.util.use
@@ -40,6 +43,7 @@ import org.readium.r2.shared.util.use
 /** Real content-provider streams, Room, filesystem and Readium; all data is isolated per test. */
 @RunWith(AndroidJUnit4::class)
 class BookImportIntegrationTest {
+    @get:Rule val testTimeout: TestRule = Timeout.seconds(120)
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val target get() = instrumentation.targetContext
     private lateinit var testRoot: File

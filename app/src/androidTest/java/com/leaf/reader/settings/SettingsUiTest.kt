@@ -28,9 +28,12 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
+import org.junit.rules.Timeout
 
 class SettingsUiTest {
-    @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+    val compose = createAndroidComposeRule<MainActivity>()
+    @get:Rule val rules: RuleChain = RuleChain.outerRule(Timeout.seconds(180)).around(compose)
 
     @Test fun settingsPersistAcrossRecreationAndDisplayBundledNotices() = runBlocking<Unit> {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

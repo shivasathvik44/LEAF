@@ -28,12 +28,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
+import org.junit.rules.Timeout
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class LeafDatabaseTest {
     private val context: Context get() = InstrumentationRegistry.getInstrumentation().targetContext
-    @get:Rule val migrations = MigrationTestHelper(InstrumentationRegistry.getInstrumentation(), LeafDatabase::class.java)
+    private val migrations = MigrationTestHelper(InstrumentationRegistry.getInstrumentation(), LeafDatabase::class.java)
+    @get:Rule val rules: RuleChain = RuleChain.outerRule(Timeout.seconds(120)).around(migrations)
     private lateinit var database: LeafDatabase
     private lateinit var books: BookRepository
     private lateinit var annotations: AnnotationRepository

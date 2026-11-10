@@ -30,7 +30,10 @@ import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TestRule
+import org.junit.rules.Timeout
 import org.junit.runner.RunWith
 import org.readium.r2.shared.ExperimentalReadiumApi
 import org.readium.r2.shared.publication.services.positions
@@ -39,6 +42,7 @@ import org.readium.r2.shared.publication.services.positions
 @OptIn(ExperimentalReadiumApi::class)
 @RunWith(AndroidJUnit4::class)
 class ReaderEngineTest {
+    @get:Rule val testTimeout: TestRule = Timeout.seconds(180)
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val context get() = instrumentation.targetContext
     private lateinit var directory: File

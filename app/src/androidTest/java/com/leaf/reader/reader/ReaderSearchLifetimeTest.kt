@@ -16,7 +16,10 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TestRule
+import org.junit.rules.Timeout
 import org.junit.runner.RunWith
 import org.readium.r2.shared.ExperimentalReadiumApi
 import org.readium.r2.shared.InternalReadiumApi
@@ -32,6 +35,7 @@ import org.readium.r2.shared.util.resource.Resource
 @RunWith(AndroidJUnit4::class)
 @OptIn(ExperimentalReadiumApi::class, InternalReadiumApi::class)
 class ReaderSearchLifetimeTest {
+    @get:Rule val testTimeout: TestRule = Timeout.seconds(120)
     @Test fun ownerReleaseWaitsForRealSearchIteratorToClose() = runBlocking {
         val fixture = delayedSearch()
         var matches = 0

@@ -214,7 +214,15 @@ run for this branch, a full accessibility review and reconciliation of the
 
 The initial CI harness inlined in `android-ci.yml` failed under `reactivecircus/android-emulator-runner@v2` because `parseScript()` splits multi-line `script:` blocks on every newline and executes each line as a separate `sh -c` subprocess, causing control-flow lines (`for`, `if`, multi-line functions) to fail immediately with shell syntax errors (exit code 2).
 
-The entire instrumentation harness—including boot-ready polling, live progress monitoring, `timeout` watchdog, and failure-diagnostic logic—was moved into `.github/scripts/run-instrumentation-ci.sh`. The CI workflow now executes this script as a single line, ensuring shell integrity. All 84 instrumentation tests pass on both API 24 and API 35 with the new harness, and hosted CI verification is pending.
+The entire instrumentation harness—including boot-ready polling, live progress monitoring, `timeout` watchdog, and failure-diagnostic logic—was moved into `.github/scripts/run-instrumentation-ci.sh`. The CI workflow executes this script as a single line, ensuring shell integrity.
+
+To eliminate single-process API 24 ART heap fragmentation, unbounded `@Before`/`@After`/`@Rule` teardown hangs (which bypassed `@Test`-only `timeout_msec`), and `LatinIME` window resizes during Compose text input, the suite was further hardened with three layers:
+
+1. **Per-test process & CI storage isolation:** [`app/build.gradle.kts`](../app/build.gradle.kts) enables `execution = "ANDROIDX_TEST_ORCHESTRATOR"` using `androidx.test:orchestrator:1.6.1` (`androidx.test.services:test-services:1.6.0`). `.github/scripts/run-instrumentation-ci.sh` passes `-Pandroid.testInstrumentationRunnerArguments.clearPackageData=true` only in CI so local non-CI runs preserve pre-existing app data.
+2. **Bounded test lifecycles & IME hardening:** All 17 `androidTest` classes enforce outer JUnit `Timeout` rules (`Timeout.seconds(180)` wrapped via `RuleChain` outside `createAndroidComposeRule` on the 7 Compose UI suites and on `ReaderEngineTest`, `ReaderAnnotationTest`, and `ReaderViewModelIntegrationTest`; `Timeout.seconds(120)` via `RuleChain` around `MigrationTestHelper` in `LeafDatabaseTest` and on the remaining 6 integration suites). Teardown blocks in `ReaderPhase3UiTest`, `ShelvesUiTest`, and `StatisticsUiTest` use `try/finally` so UUID record and temp-directory cleanup still run if reader/scenario closing throws, and text-input helpers call `InputMethodManager.hideSoftInputFromWindow` alongside `closeSoftKeyboard()`.
+3. **CI watchdog & live stall diagnostics:** `.github/scripts/run-instrumentation-ci.sh` clears stale `test-results.log` files at startup, sets `show_ime_with_hard_keyboard 0` on the emulator, passes `-Pandroid.testInstrumentationRunnerArguments.timeout_msec=120000`, resets `awk` status fields on every `INSTRUMENTATION_STATUS_CODE:` block for clean Orchestrator progress logging, and monitors live `test-results.log` activity with a 240s stall watchdog and a 1680s wall-clock ceiling inside the 35-minute workflow step limit—capturing `ps`, best-effort `kill -3` ANR traces, `meminfo`, `window windows`, `activity top`, `input_method`, and `logcat` under `app/build/outputs/androidTest-results/ci-watchdog-diagnostics/` before terminating Gradle with exit code `124`.
+
+Local verification with JDK 17 passed `:app:assembleDebug`, `:app:assembleDebugAndroidTest`, `:app:testDebugUnitTest` (**81/81** passing, 0 skipped/failed), `:app:lintDebug` (0 errors, 19 warnings), `bash -n`, `actionlint`, a 12s watchdog stall dry-run (exiting `124` with all 6 diagnostic files captured), and full Orchestrator instrumentation runs on local `emulator-36.1.9` (`-gpu host -feature -Vulkan`, 2048 MB RAM): **84/84** passing on `leaf-ci-api24` (222.928s test XML / 4m Gradle wall time) and **84/84** passing on `leaf-ci-api35` (389.143s test XML / 7m 1s Gradle wall time). Hosted GitHub Actions verification with `-gpu swiftshader_indirect` on `ubuntu-latest` is still pending for this change.
 
 ## Commands
 
@@ -261,11 +269,16 @@ Both Android CI jobs use the SDK setup action to install `platform-tools`,
 `platforms;android-37.0` and `build-tools;37.0.0`. The build job runs JVM unit
 tests and lint and uploads the debug APK when its checks pass. The device jobs
 run the full instrumentation suite on Google APIs x86_64 images for API 24 and
-35, with `-Pandroid.testInstrumentationRunnerArguments.timeout_msec=180000`,
-an inner 22-minute `timeout` watchdog around `:app:connectedDebugAndroidTest`
-(with live 10s progress output and ADB failure diagnostics), and a 35-minute
-step limit on emulator setup and test execution. Reports are retained even when
-a check fails. GitHub Actions must pass before CI can be reported as verified.
-API 37 and 16 KB page-size validation are separate release checks.
+35 under `ANDROIDX_TEST_ORCHESTRATOR` with outer JUnit `Timeout` rules (120s or
+180s per class) via `.github/scripts/run-instrumentation-ci.sh`, passing
+`-Pandroid.testInstrumentationRunnerArguments.timeout_msec=120000` and
+`-Pandroid.testInstrumentationRunnerArguments.clearPackageData=true`, suppressing
+hardware-keyboard IME popups (`show_ime_with_hard_keyboard 0`), streaming live
+per-test progress with a 240s stall watchdog and 1680s wall-clock ceiling (which
+save live `adb` diagnostics under `app/build/outputs/androidTest-results/ci-watchdog-diagnostics/`
+before terminating), and enforcing a 35-minute step limit on emulator setup and
+test execution. Reports are retained even when a check fails. GitHub Actions
+must pass before CI can be reported as verified. API 37 and 16 KB page-size
+validation are separate release checks.
 
 Before release, repeat the full fixture and device matrix, inspect the merged release manifest and dependency licenses, verify signing with owner-supplied credentials, and record the APK checksum and output path. An unsigned release artifact or debug-signed APK is not a production signed release.

@@ -52,6 +52,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
+import org.junit.rules.Timeout
 import org.junit.runner.RunWith
 
 /**
@@ -60,7 +62,8 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class ReaderActivityUiTest {
-    @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+    val compose = createAndroidComposeRule<MainActivity>()
+    @get:Rule val rules: RuleChain = RuleChain.outerRule(Timeout.seconds(180)).around(compose)
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val context get() = instrumentation.targetContext
     private val repositories get() = EntryPointAccessors.fromApplication(
@@ -185,7 +188,7 @@ class ReaderActivityUiTest {
             file.absolutePath, null, null, file.length(), hash, System.currentTimeMillis()))
         readerDependencies.preferences().resetReaderPrefs(id)
         compose.onNodeWithText("Search your library").performTextReplacement(title)
-        closeSoftKeyboard()
+        dismissKeyboard()
         val card = hasText(title) and hasClickAction() and !hasSetTextAction()
         compose.waitUntil(15_000L) { compose.onAllNodes(card).fetchSemanticsNodes().size == 1 }
         compose.onNode(card).performClick()
@@ -197,6 +200,16 @@ class ReaderActivityUiTest {
         compose.waitForIdle()
         assertNull(requireNotNull(model).state.value.error)
         assertTrue(requireNotNull(model).state.value.contentReady)
+    }
+
+    private fun dismissKeyboard() {
+        compose.waitForIdle()
+        compose.activityRule.scenario.onActivity { activity ->
+            val imm = activity.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+            val token = activity.currentFocus?.windowToken ?: activity.window.decorView.windowToken
+            imm?.hideSoftInputFromWindow(token, 0)
+        }
+        closeSoftKeyboard()
     }
 
     private suspend fun awaitHeartbeat(stage: String, after: Long = 0L): List<ReadingSession> {
