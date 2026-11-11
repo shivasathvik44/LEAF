@@ -4,7 +4,7 @@ Leaf is a native, offline-first Android ebook reader for a personal EPUB and PDF
 
 ## Development status
 
-Leaf is being implemented from an empty repository. It is **not a completed v1.0 release**. Feature availability and verification must be checked against [the implementation checklist](docs/implementation-checklist.md) and [testing notes](docs/testing.md). A successful compilation alone does not establish that importing, rendering, annotations, or position restoration work on a device.
+Leaf v1.0.0-rc1 is available as the first public release candidate. Feature availability and verification must still be checked against [the implementation checklist](docs/implementation-checklist.md) and [testing notes](docs/testing.md). A successful compilation alone does not establish that importing, rendering, annotations, or position restoration work on a device.
 
 Library and import, the reader, EPUB annotations and search, custom shelves,
 and foreground reading activity have passed local checks on API 24 and API 35.
@@ -29,6 +29,12 @@ The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk` after a 
 ```
 
 First-time build dependency downloads require internet access. Reading local publications must work without an internet connection. Toolchain and dependency versions are recorded in the Gradle version catalog and [dependency notes](docs/dependencies.md).
+
+## Install the release candidate
+
+Download [LEAF v1.0.0-rc1](https://github.com/shivasathvik44/LEAF/releases/tag/v1.0.0-rc1) from GitHub. On an Android device, open `leaf-v1.0.0-rc1.apk`, allow installation from the relevant source if requested, and install LEAF.
+
+Verify the downloaded APK with the attached [`SHA256SUMS.txt`](https://github.com/shivasathvik44/LEAF/releases/download/v1.0.0-rc1/SHA256SUMS.txt) file before installing it. This is a release candidate; feedback and bug reports are welcome.
 
 ## Product scope
 
